@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URLDecoder
+import java.nio.charset.Charset
 
 /**
  * 解析下载文件的真实名称。
@@ -30,6 +31,38 @@ import java.net.URLDecoder
  * 3. 响应头 `Content-Disposition` 的 filename / filename*（RFC 5987）。
  */
 object DownloadFileName {
+
+    /**
+     * 把名称还原成可读形式：先解百分号编码，再修 UTF-8 被当成 Latin-1 读出的乱码。
+     *
+     * 两个来源都会产出乱码：
+     * - URL 末段常常是 `%E4%B8%AD%E6%96%87.zip`，不解码就直接当文件名；
+     * - HTTP 头按规范是 Latin-1，服务端实际发的是 UTF-8 字节时，
+     *   拿到手就变成 `ä¸­æ–‡.zip` 这种。
+     */
+    fun readable(name: String): String {
+        if (name.isBlank()) return name
+        // 先把 + 转义掉：URLDecoder 会把 + 解成空格，而文件名里的 + 是真实字符
+        val decoded = runCatching { URLDecoder.decode(name.replace("+", "%2B"), "UTF-8") }
+            .getOrDefault(name)
+        return repairUtf8Mojibake(decoded)
+    }
+
+    /**
+     * 修正「UTF-8 字节被按 Latin-1 解码」产生的乱码。
+     *
+     * 只在两种解码结果确实不同且不含替换符时才替换，所以正常的 ASCII / 中文名
+     * 一律原样返回；带重音字母的拉丁文件名（café.pdf）重新编码后不是合法 UTF-8，
+     * 也会原样返回，不会被误伤。
+     */
+    private fun repairUtf8Mojibake(name: String): String {
+        // 没有高位字符就不可能是这种乱码，直接跳过
+        if (name.none { it.code in 0x80..0xFF }) return name
+        val bytes = name.toByteArray(Charset.forName("ISO-8859-1"))
+        val decoded = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull() ?: return name
+        if (decoded == name || decoded.contains('\uFFFD')) return name
+        return decoded
+    }
 
     /** 常见的「通用下载入口」末段，这类名字不能当作真实文件名 */
     private val genericNames = setOf(
@@ -52,7 +85,7 @@ object DownloadFileName {
                 val raw = params.firstOrNull { it.first == key }?.second ?: continue
                 val decoded = runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
                 // path 类参数取末段
-                val candidate = decoded.substringAfterLast('/').substringAfterLast('\\')
+                val candidate = readable(decoded.substringAfterLast('/').substringAfterLast('\\'))
                 if (candidate.isNotBlank() && !isGeneric(candidate) && candidate.contains('.')) return candidate
             }
         }
@@ -189,16 +222,16 @@ object DownloadFileName {
             val raw = match.groupValues[1].trim().trim('"')
             val encoded = raw.substringAfter("''", raw)
             val decoded = runCatching { URLDecoder.decode(encoded, "UTF-8") }.getOrDefault(encoded)
-            if (decoded.isNotBlank()) return decoded.substringAfterLast('/').substringAfterLast('\\')
+            if (decoded.isNotBlank()) return readable(decoded.substringAfterLast('/').substringAfterLast('\\'))
         }
         // filename="名字.zip"
         Regex("filename\\s*=\\s*\"([^\"]+)\"", RegexOption.IGNORE_CASE).find(value)?.let { match ->
             val name = match.groupValues[1].trim()
-            if (name.isNotBlank()) return name.substringAfterLast('/').substringAfterLast('\\')
+            if (name.isNotBlank()) return readable(name.substringAfterLast('/').substringAfterLast('\\'))
         }
         Regex("filename\\s*=\\s*([^;]+)", RegexOption.IGNORE_CASE).find(value)?.let { match ->
             val name = match.groupValues[1].trim().trim('"')
-            if (name.isNotBlank()) return name.substringAfterLast('/').substringAfterLast('\\')
+            if (name.isNotBlank()) return readable(name.substringAfterLast('/').substringAfterLast('\\'))
         }
         return null
     }

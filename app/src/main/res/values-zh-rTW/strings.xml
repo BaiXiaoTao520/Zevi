@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">Zevi</string>
     <string name="s000">無法存取此網站</string>
+    <string name="err_page_sub_offline">裝置目前未連線網路，請檢查 Wi-Fi 或行動數據後重試</string>
+    <string name="err_page_sub_timeout">伺服器長時間沒有回應，可能是網路較慢或站點暫時無法使用</string>
+    <string name="err_page_sub_generic">頁面載入時發生了問題，可以重新載入，或返回首頁換個頁面</string>
     <string name="compliance_title">您即將進入大陸搜尋引擎</string>
     <string name="compliance_body">該搜尋引擎會記錄您的搜尋內容與裝置資訊。若您確認繼續，相關請求將由您自行發起與承擔。</string>
     <string name="compliance_hint">搜尋引擎會記錄您的搜尋內容與裝置資訊，請勿在其中輸入帳號密碼、身分證號、銀行卡等敏感資訊；搜尋結果中的下載連結與廣告請謹慎點擊，避免誤裝來路不明的應用程式。</string>
@@ -181,6 +184,7 @@
     <string name="dl_log_hash_missing">（未產生）</string>
     <string name="dl_failed_hint">下載失敗，可在「更多」中檢視紀錄</string>
     <string name="dl_open_file">開啟</string>
+    <string name="dl_share">分享</string>
     <string name="dl_cancel_download">取消下載</string>
     <string name="s159">正在下載</string>
     <string name="s160">已暫停</string>
