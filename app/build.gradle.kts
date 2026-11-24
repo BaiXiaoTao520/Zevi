@@ -6,8 +6,8 @@ plugins {
 
 // GeckoView 内核版本：单一来源。依赖坐标与 BuildConfig 都从这里取值，
 // 避免升级内核时漏改某一处、导致 UA 声称的版本与实际内核不一致。
-val geckoViewVersion = "158.0.20261021001945"
-// 仅保留主版本号（如 "158.0"），供 UA 生成使用
+val geckoViewVersion = "160.0.20261116130455"
+// 仅保留主版本号（如 "160.0"），供 UA 生成使用
 val geckoViewMajorVersion = geckoViewVersion.split('.').take(2).joinToString(".")
 
 // 柠枺镜像（Lemwood）配置：不硬编码在源码里，由环境变量或 gradle.properties 注入。
@@ -82,11 +82,11 @@ android {
         applicationId = "com.zex.zexbrowse"
         minSdk = 29
         targetSdk = 37
-        versionCode = 101
-        versionName = "12.1.3"
+        versionCode = 102
+        versionName = "12.1.5"
         ndk { abiFilters += "arm64-v8a" }
 
-        // GeckoView 内核主版本号（如 "158.0"），供 UA 生成与兜底使用
+        // GeckoView 内核主版本号（如 "160.0"），供 UA 生成与兜底使用
         buildConfigField("String", "GECKOVIEW_VERSION", "\"$geckoViewMajorVersion\"")
 
         // 柠枺镜像（Lemwood）高速下载服务。
@@ -192,9 +192,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
-    // GeckoView 内核：升级到 158（2026-10），替代原先的 131（2024-10）。
-    // 旧版本落后 27 个版本，累积了大量已修复的高危漏洞（沙箱逃逸、UAF、同源绕过等），
-    // 浏览器内核直接渲染不可信网页，必须保持更新。
+    // GeckoView 内核：升级到 160（2026-11），此前为 158（2026-10）。
+    // 浏览器内核直接渲染不可信网页，累积的沙箱逃逸、UAF、同源绕过等漏洞必须及时跟上。
     implementation("org.mozilla.geckoview:geckoview:$geckoViewVersion")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

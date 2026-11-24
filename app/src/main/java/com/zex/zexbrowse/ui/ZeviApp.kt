@@ -176,6 +176,7 @@ import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -324,7 +325,6 @@ private enum class SearchGroup(val labelRes: Int, val icon: androidx.compose.ui.
     BOOKMARKS(R.string.s098, Icons.Rounded.Bookmarks),
     DEFAULT_BROWSER(R.string.s042, Icons.Rounded.Public),
     NETWORK(R.string.netdiag_title, Icons.Rounded.NetworkCheck),
-    LINK_DIAGNOSTICS(R.string.s277, Icons.Default.Language),
     ABOUT(R.string.s281, Icons.Default.Info),
     CONTACT(R.string.s288, Icons.Rounded.ContactSupport)
 }
@@ -1009,6 +1009,17 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
     val page = navStack.last()
     val navigate: (Page) -> Unit = { navForward = true; navStack = navStack + it }
     val goBack: () -> Unit = { if (navStack.size > 1) { navForward = false; navStack = navStack.dropLast(1) } }
+    // 退出调试模式：直接回设置首页。解锁标志此时已清除，高级设置入口会立刻消失，
+    // 只退一层会停在已失效的高级页，看起来像没退干净。
+    val exitDebugMode: () -> Unit = {
+        val settingsIndex = navStack.indexOf(Page.SETTINGS)
+        navForward = false
+        navStack = if (settingsIndex >= 0) {
+            navStack.take(settingsIndex + 1)
+        } else {
+            listOf(Page.HOME, Page.SETTINGS)
+        }
+    }
     var tabsIncognito by remember { mutableStateOf(false) }
     var startupUpdate by remember { mutableStateOf<ReleaseInfo?>(null) }
     // 赞助与支持：从「关于」页的卡片入口打开说明弹窗
@@ -1369,7 +1380,8 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                                 resetToHomeImmediately = { browserExitReset++; navForward = false; navStack = listOf(Page.HOME) },
                                 goBack = goBack,
                                 onSponsor = { sponsorInfo = true },
-                                onLanguage = { showLanguageSheet = true }
+                                onLanguage = { showLanguageSheet = true },
+                                onExitDebug = exitDebugMode
                             )
                         } else {
                             // 目标为浏览器页：不能重复创建 GeckoView，用主题背景色占位，
@@ -1447,7 +1459,8 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                                 resetToHomeImmediately = { browserExitReset++; navForward = false; navStack = listOf(Page.HOME) },
                                 goBack = goBack,
                                 onSponsor = { sponsorInfo = true },
-                                onLanguage = { showLanguageSheet = true }
+                                onLanguage = { showLanguageSheet = true },
+                                onExitDebug = exitDebugMode
                             )
                         }
                     }
@@ -1588,7 +1601,8 @@ private fun PageContent(
     resetToHomeImmediately: () -> Unit,
     goBack: () -> Unit,
     onSponsor: () -> Unit,
-    onLanguage: () -> Unit
+    onLanguage: () -> Unit,
+    onExitDebug: () -> Unit
 ) {
     when (destination) {
         Page.HOME -> HomeScreen(
@@ -1702,7 +1716,10 @@ private fun PageContent(
         )
         Page.DEBUG -> DebugScreen(
             settings = settings,
-            onBack = goBack
+            onBack = goBack,
+            // 退出调试后回设置首页：解锁标志已清，高级设置入口会立即消失，
+            // 若只退一层就会停在已失效的高级页，看起来像没退干净
+            onExitDebug = onExitDebug
         )
         Page.NETWORK_DIAGNOSTICS -> NetworkDiagnosticsScreen(onBack = goBack)
         Page.SITE_SETTINGS -> WebSiteSettingsScreen(
@@ -4714,7 +4731,6 @@ private fun SettingsScreen(
     onContactUs: () -> Unit,
     onBack: () -> Unit
 ) {
-    var showLinkDiagnostics by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // 设置搜索：按关键词过滤上方入口卡片
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -4757,7 +4773,9 @@ private fun SettingsScreen(
         SettingSearchItem(stringResource(R.string.s098), SearchGroup.BOOKMARKS, listOf("书签", "收藏", "收藏夹", "书签管理", "首页", "bookmark", "bookmarks", "favorite", "home"), onBookmarks),
         SettingSearchItem(stringResource(R.string.s042), SearchGroup.DEFAULT_BROWSER, listOf("默认", "浏览器", "角色", "默认应用", "默认浏览器", "default", "browser", "role"), onSetDefaultBrowser, accent = true, subtitle = stringResource(R.string.set_default_sub)),
         SettingSearchItem(stringResource(R.string.netdiag_title), SearchGroup.NETWORK, listOf("网络", "诊断", "检测", "延迟", "DNS", "连通", "测速", "network", "diagnostics", "ping", "latency", "dns", "connectivity"), onNetworkDiagnostics),
-        SettingSearchItem(stringResource(R.string.s277), SearchGroup.LINK_DIAGNOSTICS, listOf("外链", "诊断", "Intent", "跳转", "链接", "link", "diagnostics", "external"), { showLinkDiagnostics = true }),
+        // 外链诊断已移入高级设置：它属于排查工具，跟日常设置不是一类，
+        // 归到 ADVANCED 分组后也随调试解锁状态一起隐藏
+        SettingSearchItem(stringResource(R.string.s277), SearchGroup.ADVANCED, listOf("外链", "诊断", "Intent", "跳转", "链接", "link", "diagnostics", "external"), onAdvancedSettings),
         SettingSearchItem(stringResource(R.string.s281), SearchGroup.ABOUT, listOf("关于", "版本", "许可", "贡献者", "赞助", "更新", "about", "version", "license", "contributor", "sponsor", "update"), onAbout),
         SettingSearchItem(stringResource(R.string.s288), SearchGroup.CONTACT, listOf("联系", "反馈", "建议", "问题", "contact", "feedback", "suggestion", "issue"), onContactUs)
     )
@@ -4778,8 +4796,6 @@ private fun SettingsScreen(
     val entryBookmarksSub = stringResource(R.string.s298)
     val entryDefaultBrowser = stringResource(R.string.s042)
     val entryDefaultBrowserSub = stringResource(R.string.s276)
-    val entryLinkDiag = stringResource(R.string.s277)
-    val entryLinkDiagSub = stringResource(R.string.s299)
     val entryNetDiag = stringResource(R.string.netdiag_title)
     val entryNetDiagSub = stringResource(R.string.netdiag_sub)
     val entryAbout = stringResource(R.string.s281)
@@ -4795,7 +4811,7 @@ private fun SettingsScreen(
     val entryAdvancedSub = stringResource(R.string.advanced_sub)
     // 调试入口只在内存解锁后才追加到列表末尾；未解锁时完全不出现
     val debugUnlocked = DebugUnlock.unlocked
-    val entries = remember(isDefaultBrowser, settings.cookiesEnabled, settings.clearOnExit, debugUnlocked, entryGeneral, entryLanguage, entryLanguageSub, entrySite, entryWebsiteSub, entryWebPerm, entryWebPermSub, entrySecurity, entryHistory, entryHistorySub, entryBookmarks, entryBookmarksSub, entryDefaultBrowser, entryDefaultBrowserSub, entryLinkDiag, entryLinkDiagSub, entryNetDiag, entryNetDiagSub, entryAbout, entryAboutSub, entryContact, entryContactSub, entryGeneralSub, entryPrivacy, entryAdBlock, settings.adBlockEnabled, entryNotification, entryNotificationSub, entryAdvanced, entryAdvancedSub) {
+    val entries = remember(isDefaultBrowser, settings.cookiesEnabled, settings.clearOnExit, debugUnlocked, entryGeneral, entryLanguage, entryLanguageSub, entrySite, entryWebsiteSub, entryWebPerm, entryWebPermSub, entrySecurity, entryHistory, entryHistorySub, entryBookmarks, entryBookmarksSub, entryDefaultBrowser, entryDefaultBrowserSub, entryNetDiag, entryNetDiagSub, entryAbout, entryAboutSub, entryContact, entryContactSub, entryGeneralSub, entryPrivacy, entryAdBlock, settings.adBlockEnabled, entryNotification, entryNotificationSub, entryAdvanced, entryAdvancedSub) {
         listOfNotNull(
             SettingsEntryItem(entryGeneral, entryGeneralSub, Icons.Rounded.Tune, onGeneralSettings),
             SettingsEntryItem(entryLanguage, entryLanguageSub, Icons.Rounded.Language, onLanguage),
@@ -4809,7 +4825,6 @@ private fun SettingsScreen(
             SettingsEntryItem(entryBookmarks, entryBookmarksSub, Icons.Rounded.Bookmarks, onBookmarks),
             SettingsEntryItem(entryDefaultBrowser, entryDefaultBrowserSub, Icons.Rounded.Public, onSetDefaultBrowser, accent = true),
             SettingsEntryItem(entryNetDiag, entryNetDiagSub, Icons.Rounded.NetworkCheck, onNetworkDiagnostics),
-            SettingsEntryItem(entryLinkDiag, entryLinkDiagSub, Icons.Default.Language, { showLinkDiagnostics = true }),
             SettingsEntryItem(entryAbout, entryAboutSub, Icons.Default.Info, onAbout),
             SettingsEntryItem(entryContact, entryContactSub, Icons.Rounded.ContactSupport, onContactUs),
             if (debugUnlocked) SettingsEntryItem(entryAdvanced, entryAdvancedSub, Icons.Rounded.Tune, onAdvancedSettings) else null
@@ -4922,15 +4937,6 @@ private fun SettingsScreen(
         }
     }
     }
-    }
-    if (showLinkDiagnostics) {
-        val info by ExternalLinkDiagnostics.last.collectAsState()
-        AlertDialog(
-            onDismissRequest = { showLinkDiagnostics = false },
-            title = { Text(stringResource(R.string.s277)) },
-            text = { Text(if (info.isBlank()) stringResource(R.string.s304) else info) },
-            confirmButton = { TextButton(onClick = { showLinkDiagnostics = false }) { Text(stringResource(R.string.s079)) } }
-        )
     }
 }
 
@@ -6613,11 +6619,14 @@ private fun LanguageCard(
 /**
  * 高级设置页。
  *
- * 目前只提供「调试模式」一个卡片选项。本页只在已连点解锁时才可达，
- * 因此卡片本身就是入口，不再需要额外开关。
+ * 本页只在已连点解锁时才可达，因此卡片本身就是入口，不再需要额外开关。
+ * 目前提供「调试模式」与「外链诊断」两项：都属于排查工具，
+ * 放在日常设置里会让普通用户困惑，收进这里更合适。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AdvancedSettingsScreen(onDebug: () -> Unit, onBack: () -> Unit) {
+    var showLinkDiagnostics by remember { mutableStateOf(false) }
     SelectionScreen(stringResource(R.string.debug_section_advanced), onBack) {
         item {
             Card(
@@ -6651,6 +6660,86 @@ private fun AdvancedSettingsScreen(onDebug: () -> Unit, onBack: () -> Unit) {
                 }
             }
         }
+        item {
+            Card(
+                onClick = { showLinkDiagnostics = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Language, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.s277), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            stringResource(R.string.s299),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(Icons.Default.ArrowForward, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+
+    if (showLinkDiagnostics) {
+        val info by ExternalLinkDiagnostics.last.collectAsState()
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        val animateDismiss: () -> Unit = {
+            scope.launch {
+                runCatching { sheetState.hide() }
+                showLinkDiagnostics = false
+            }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showLinkDiagnostics = false },
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    stringResource(R.string.s277),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Text(
+                        if (info.isBlank()) stringResource(R.string.s304) else info,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(14.dp)
+                    )
+                }
+                OutlinedButton(onClick = animateDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.s079))
+                }
+            }
+        }
     }
 }
 
@@ -6666,7 +6755,8 @@ private fun AdvancedSettingsScreen(onDebug: () -> Unit, onBack: () -> Unit) {
 @Composable
 private fun DebugScreen(
     settings: BrowserSettings,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onExitDebug: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -6750,7 +6840,7 @@ private fun DebugScreen(
                     // 锁定只清内存标志：设置页入口立即消失，重新打开需再连点
                     DebugUnlock.lock()
                     Toast.makeText(context, context.getString(R.string.debug_locked), Toast.LENGTH_SHORT).show()
-                    onBack()
+                    onExitDebug()
                 }
             )
         }
@@ -7951,7 +8041,6 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
     var connecting by remember { mutableStateOf(true) }
     var result by remember { mutableStateOf<UpdateDownloadResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val downloading = downloadJob?.isActive == true
 
     // 重试时更换文件名，绕开 HTTP 缓存（OkHttp 默认会缓存重定向与响应）
     val requestUrl = if (attempt == 0) effectiveUrl else effectiveUrl.suffixQuery("retry" to attempt.toString())
@@ -7989,7 +8078,7 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
         }
     }
 
-    // 关闭窗口（系统返回或点关闭）：先停下载，再同步清掉未完成的文件。
+    // 关闭面板（系统返回、点遮罩或点取消）：先停下载，再同步清掉未完成的文件。
     // 删除必须同步完成：本函数的 composition scope 会在 onBack() 后立即销毁，
     // 若删在协程里，标签页被销毁时会连同删除任务一起取消，文件就会残留。
     val cancelAndClean = {
@@ -7998,52 +8087,87 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
         DownloadManager(context).deleteUpdateApk(fileName)
     }
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        // Read the job at transition time, including immediately after Cancel clears it.
+        confirmValueChange = remember {
+            { target -> target != SheetValue.Hidden || downloadJob?.isActive != true }
+        }
+    )
+    val animateDismiss: () -> Unit = {
+        scope.launch {
+            runCatching { sheetState.hide() }
+            onBack()
+        }
+    }
+
+    ModalBottomSheet(
         // 下载进行中不允许点外部关闭，避免文件残留；需用「取消」按钮
-        onDismissRequest = { if (!downloading) { cancelAndClean(); onBack() } },
-        title = {
+        onDismissRequest = { if (downloadJob?.isActive != true) { cancelAndClean(); onBack() } },
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Download, stringResource(R.string.s432), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
-                Text(if (result != null) stringResource(R.string.dl_status_completed) else stringResource(R.string.s433, release.version))
+                Text(
+                    if (result != null) stringResource(R.string.dl_status_completed) else stringResource(R.string.s433, release.version),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.s434, channel), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                // 先解包：error 是委托属性，不能直接在 when 分支条件里传参
-                val errText = error
+            Text(stringResource(R.string.s434, channel), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 先解包：error 是委托属性，不能直接在 when 分支条件里传参
+            val errText = error
+            when {
+                result != null -> {
+                    Text(stringResource(R.string.s435, result!!.file.name), style = MaterialTheme.typography.bodyMedium)
+                    Text(result!!.file.absolutePath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                errText != null -> Text(stringResource(R.string.s436, errText), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                connecting -> {
+                    LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(), amplitude = 0.5f, wavelength = 24.dp)
+                    Text(stringResource(R.string.s076), style = MaterialTheme.typography.bodyMedium)
+                }
+                else -> {
+                    WavyProgressBar(progress = progress / 100f, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.s075, progress), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 三种状态下的「取消」都停下载并删除文件（含已完成的安装包），不留残留
+                OutlinedButton(
+                    onClick = { cancelAndClean(); animateDismiss() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.s071))
+                }
                 when {
-                    result != null -> {
-                        Text(stringResource(R.string.s435, result!!.file.name))
-                        Text(result!!.file.absolutePath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    result != null -> Button(
+                        onClick = { openUpdateApk(context, result!!.file); animateDismiss() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.s077))
                     }
-                    errText != null -> Text(stringResource(R.string.s436, errText), color = MaterialTheme.colorScheme.error)
-                    connecting -> {
-                        LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(), amplitude = 0.5f, wavelength = 24.dp)
-                        Text(stringResource(R.string.s076))
-                    }
-                    else -> {
-                        WavyProgressBar(progress = progress / 100f, modifier = Modifier.fillMaxWidth())
-                        Text(stringResource(R.string.s075, progress))
+                    errText != null -> Button(
+                        onClick = { attempt += 1 },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.s437))
                     }
                 }
             }
-        },
-        confirmButton = {
-            if (result != null) {
-                Button(onClick = { openUpdateApk(context, result!!.file); onBack() }) {
-                    Icon(Icons.Default.OpenInNew, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.s077))
-                }
-            } else if (error != null) {
-                Button(onClick = { attempt += 1 }) { Text(stringResource(R.string.s437)) }
-            }
-        },
-        dismissButton = {
-            // 三种状态下的「取消」都停下载并删除文件（含已完成的安装包），不留残留
-            TextButton(onClick = { cancelAndClean(); onBack() }) { Text(stringResource(R.string.s071)) }
         }
-    )
+    }
 }

@@ -190,7 +190,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val selected get() = _tabs.value.firstOrNull { it.id == _selectedId.value }
 
     /**
-     * 内核版本号（如 "158.0"），用于生成 UA。
+     * 内核版本号（如 "160.0"），用于生成 UA。
      *
      * 优先用构建配置的版本：GeckoSession.getDefaultUserAgent() 在部分渠道/首次初始化时
      * 会返回一个与真实内核不同的旧版本号（实测会停在 150），
