@@ -16,6 +16,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
@@ -285,6 +286,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLDecoder
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebRequestError
@@ -1702,12 +1704,7 @@ private fun PageContent(
             // 关掉最后一个标签（或点叉号）后回首页，而不是停在新建的 about 空白页；
             // 无痕环境同样回首页（首页会自动按当前模式进无痕入口）
             onAllTabsClosed = resetToHome,
-            // 无痕标签被全部关掉：彻底退出无痕（清 Cookie/缓存）后回首页
-            onExitIncognito = { tabId ->
-                resetToHomeImmediately()
-                browserViewModel.close(tabId)
-                browserViewModel.exitIncognito()
-            }
+            onReturnHomeImmediately = resetToHomeImmediately
         )
         Page.TABS -> TabOverview(
             viewModel = browserViewModel,
@@ -3785,7 +3782,7 @@ private fun BookmarkDialog(initial: QuickSite? = null, onSubmit: (QuickSite) -> 
 }
 
 @Composable
-private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings, settingsStore: SettingsStore, onTabs: (Boolean) -> Unit, onDownloads: () -> Unit, onSettings: () -> Unit, onIncognitoHome: () -> Unit, onAllTabsClosed: () -> Unit, onExitIncognito: (String) -> Unit) {
+private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings, settingsStore: SettingsStore, onTabs: (Boolean) -> Unit, onDownloads: () -> Unit, onSettings: () -> Unit, onIncognitoHome: () -> Unit, onAllTabsClosed: () -> Unit, onReturnHomeImmediately: () -> Unit) {
     val tabs by viewModel.tabs.collectAsState()
     val selectedId by viewModel.selectedId.collectAsState()
     val selectedTab = tabs.firstOrNull { it.id == selectedId }
@@ -4068,12 +4065,14 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
                     // 因此 failed 在拦截时恒为 false。
                     val fakeSite = selectedTab.fakeSite
                     val restricted = selectedTab.restrictedEngine
-                    // 完整报错页的「返回首页」：先关掉当前标签，再回软件首页。
+                    // 完整报错页的「返回首页」：关闭当前标签并回首页。
+                    // 无痕标签关闭前先重置页面，避免退出动画显示切换后的标签。
                     // 只跳转不关标签的话，用户回到首页后那个失败的标签还挂在后台，
                     // 下次点标签又回到同一个报错页。
                     val backHomeAndClose: () -> Unit = {
+                        if (selectedTab.incognito) onReturnHomeImmediately()
                         viewModel.close(selectedTab.id)
-                        onAllTabsClosed()
+                        if (!selectedTab.incognito) onAllTabsClosed()
                     }
                     if (fakeSite != null) {
                         // 假冒站点：只有返回首页，没有继续访问
@@ -4594,7 +4593,9 @@ private fun downloadMimeType(fileName: String): String = when {
     fileName.endsWith(".apk", true) -> "application/vnd.android.package-archive"
     fileName.endsWith(".pdf", true) -> "application/pdf"
     fileName.endsWith(".zip", true) -> "application/zip"
-    else -> "application/octet-stream"
+    else -> MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(fileName.substringAfterLast('.', "").lowercase())
+        ?: "application/octet-stream"
 }
 
 /**
@@ -7355,7 +7356,10 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
     var expectedHash by rememberSaveable { mutableStateOf("") }
     // 初始名称取 URL 末段；末段常是百分号编码或乱码，先还原再展示，
     // 若它是 download.aspx 这类通用入口，则异步探测真实文件名
-    val initialName = DownloadFileName.readable(url.substringAfterLast('/').substringBefore('?')).ifBlank { "download" }
+    val encodedName = url.substringAfterLast('/').substringBefore('?')
+    val decodedName = runCatching { URLDecoder.decode(encodedName.replace("+", "%2B"), "UTF-8") }
+        .getOrDefault(encodedName)
+    val initialName = DownloadFileName.readable(decodedName).ifBlank { "download" }
     var fileName by remember(url) { mutableStateOf(initialName) }
     // skipResolve：已有本地捕获的响应体时不得再发网络探测——对一次性令牌地址二次请求会 403
     var resolving by remember(url) { mutableStateOf(!skipResolve && DownloadFileName.isGeneric(initialName)) }

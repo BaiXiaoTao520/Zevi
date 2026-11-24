@@ -15,7 +15,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URLDecoder
-import java.nio.charset.Charset
 
 /**
  * 解析下载文件的真实名称。
@@ -32,21 +31,8 @@ import java.nio.charset.Charset
  */
 object DownloadFileName {
 
-    /**
-     * 把名称还原成可读形式：先解百分号编码，再修 UTF-8 被当成 Latin-1 读出的乱码。
-     *
-     * 两个来源都会产出乱码：
-     * - URL 末段常常是 `%E4%B8%AD%E6%96%87.zip`，不解码就直接当文件名；
-     * - HTTP 头按规范是 Latin-1，服务端实际发的是 UTF-8 字节时，
-     *   拿到手就变成 `ä¸­æ–‡.zip` 这种。
-     */
-    fun readable(name: String): String {
-        if (name.isBlank()) return name
-        // 先把 + 转义掉：URLDecoder 会把 + 解成空格，而文件名里的 + 是真实字符
-        val decoded = runCatching { URLDecoder.decode(name.replace("+", "%2B"), "UTF-8") }
-            .getOrDefault(name)
-        return repairUtf8Mojibake(decoded)
-    }
+    /** 修复文件名乱码；如果来源需要 URL 解码，由调用方处理。 */
+    fun readable(name: String): String = repairUtf8Mojibake(name)
 
     /**
      * 修正「UTF-8 字节被按 Latin-1 解码」产生的乱码。
@@ -58,7 +44,9 @@ object DownloadFileName {
     private fun repairUtf8Mojibake(name: String): String {
         // 没有高位字符就不可能是这种乱码，直接跳过
         if (name.none { it.code in 0x80..0xFF }) return name
-        val bytes = name.toByteArray(Charset.forName("ISO-8859-1"))
+        val latin1 = Charsets.ISO_8859_1
+        if (!latin1.newEncoder().canEncode(name)) return name
+        val bytes = name.toByteArray(latin1)
         val decoded = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull() ?: return name
         if (decoded == name || decoded.contains('\uFFFD')) return name
         return decoded
