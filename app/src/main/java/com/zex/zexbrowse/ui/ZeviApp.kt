@@ -176,6 +176,7 @@ import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -8040,7 +8041,6 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
     var connecting by remember { mutableStateOf(true) }
     var result by remember { mutableStateOf<UpdateDownloadResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val downloading = downloadJob?.isActive == true
 
     // 重试时更换文件名，绕开 HTTP 缓存（OkHttp 默认会缓存重定向与响应）
     val requestUrl = if (attempt == 0) effectiveUrl else effectiveUrl.suffixQuery("retry" to attempt.toString())
@@ -8087,7 +8087,13 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
         DownloadManager(context).deleteUpdateApk(fileName)
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        // Read the job at transition time, including immediately after Cancel clears it.
+        confirmValueChange = remember {
+            { target -> target != SheetValue.Hidden || downloadJob?.isActive != true }
+        }
+    )
     val animateDismiss: () -> Unit = {
         scope.launch {
             runCatching { sheetState.hide() }
@@ -8097,7 +8103,7 @@ private fun UpdateDownloadDialog(release: ReleaseInfo, onBack: () -> Unit) {
 
     ModalBottomSheet(
         // 下载进行中不允许点外部关闭，避免文件残留；需用「取消」按钮
-        onDismissRequest = { if (!downloading) { cancelAndClean(); onBack() } },
+        onDismissRequest = { if (downloadJob?.isActive != true) { cancelAndClean(); onBack() } },
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
