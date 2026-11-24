@@ -8,6 +8,7 @@ package com.zex.zexbrowse
 
 import android.app.Application
 import android.content.ComponentCallbacks2
+import com.zex.zexbrowse.util.DebugUnlock
 import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
@@ -19,6 +20,8 @@ class ZeviApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter.install(this)
+        // 调试解锁状态持久化：读回后设置页才能在第一帧就渲染出入口
+        DebugUnlock.init(this)
     }
 
     /**

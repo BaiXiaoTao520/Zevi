@@ -6,6 +6,8 @@
 
 package com.zex.zexbrowse.util
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -13,14 +15,20 @@ import androidx.compose.runtime.setValue
 /**
  * 调试功能的解锁状态。
  *
- * 只存在于进程内存，不落盘、不进 savedInstanceState：
- * 进程结束（用户划掉应用、系统回收、重启）或重新安装后自动回到未解锁，
- * 必须重新手动连点才能再次打开，与开发者选项「每次都要重新解锁」的预期一致。
+ * 解锁后一直有效，直到用户在调试页里主动点「退出调试模式」：
+ * 进程结束、系统回收、甚至重启设备都不会让入口消失。高级设置属于排查工具，
+ * 用户是特意连点 7 次打开的，不该因为切了个后台就又要重来一遍。
+ *
+ * 状态落在 SharedPreferences 而不是 DataStore：这里需要在组合期同步读到值，
+ * 决定设置页是否渲染入口卡片；异步读取会先闪一下「没有入口」再补上。
  *
  * 用 Compose 的 mutableStateOf 持有：设置页依赖它决定是否显示入口卡片，
  * 解锁瞬间列表需要即时刷新。
  */
 object DebugUnlock {
+
+    private const val PREFS_NAME = "debug_unlock"
+    private const val KEY_UNLOCKED = "unlocked"
 
     /** 连点次数阈值，与 Android 开发者选项的传统一致 */
     private const val REQUIRED_TAPS = 7
@@ -33,11 +41,25 @@ object DebugUnlock {
      */
     private const val TAP_WINDOW_MILLIS = 1_500L
 
+    private var prefs: SharedPreferences? = null
+
     var unlocked by mutableStateOf(false)
         private set
 
     private var taps = 0
     private var lastTapAt = 0L
+
+    /**
+     * 读回上次持久化的解锁状态，由 Application.onCreate 调用。
+     *
+     * 必须在首次组合之前完成，否则设置页会先按「未解锁」渲染一帧。
+     */
+    fun init(context: Context) {
+        if (prefs != null) return
+        val store = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs = store
+        unlocked = store.getBoolean(KEY_UNLOCKED, false)
+    }
 
     /**
      * 记录一次点击。
@@ -52,15 +74,17 @@ object DebugUnlock {
         if (taps >= REQUIRED_TAPS) {
             taps = 0
             unlocked = true
+            prefs?.edit()?.putBoolean(KEY_UNLOCKED, true)?.apply()
             return 0
         }
         return REQUIRED_TAPS - taps
     }
 
-    /** 退出调试模式：立即失效，需重新连点 */
+    /** 退出调试模式：立即失效并清除持久化状态，需重新连点 */
     fun lock() {
         taps = 0
         lastTapAt = 0L
         unlocked = false
+        prefs?.edit()?.putBoolean(KEY_UNLOCKED, false)?.apply()
     }
 }
