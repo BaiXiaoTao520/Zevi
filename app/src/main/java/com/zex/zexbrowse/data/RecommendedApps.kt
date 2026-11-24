@@ -150,9 +150,9 @@ val fluffychatRecommendation = RecommendedApp(
 
 val reveriePaintRecommendation = RecommendedApp(
     name = "ReveriePaint",
-    version = "v1.4.0",
+    version = "v1.10.2",
     summary = "基于 Krita 核心引擎打造的 Android 原生数字绘画应用",
-    downloadUrl = "https://github.com/LanRhyme/ReveriePaint/releases/download/v1.4.0/ReveriePaint-v1.4.0.apk",
+    downloadUrl = "https://github.com/LanRhyme/ReveriePaint/releases/download/v1.10.2/ReveriePaint-v1.10.2-arm64-v8a.apk",
     icon = Icons.Rounded.Brush,
     category = RecommendCategory.CREATE,
     description = """
@@ -289,9 +289,9 @@ val aEmulatorRecommendation = RecommendedApp(
  */
 val cccodroidRecommendation = RecommendedApp(
     name = "cccodroid",
-    version = "0.4.17",
+    version = "0.8.0",
     summary = "A development launcher that runs Claude Code on Android phones. No root, no custom ROM, no chroot / proot / VM.",
-    downloadUrl = "https://github.com/greyoak111/cccodroid/releases/download/v0.4.17/cccodroid-36.apk",
+    downloadUrl = "https://github.com/greyoak111/cccodroid/releases/download/v0.8.0/cccodroid-36.apk",
     icon = Icons.Rounded.Construction,
     category = RecommendCategory.TOOLS,
     description = "cccodroid is a third-party project and is not affiliated with Anthropic. It runs the official, unmodified Claude Code: downloaded from Anthropic's official channel at install time (or, when that is unreachable, the identical file Anthropic publishes on npm, via a mirror), verified against the official sha256 manifest, never modified."
