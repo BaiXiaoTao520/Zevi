@@ -16,6 +16,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
@@ -285,6 +286,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLDecoder
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebRequestError
@@ -731,6 +733,9 @@ private fun FakeSiteBlockedView(
  *
  * 错误码直接使用 [org.mozilla.geckoview.WebRequestError] 中的符号常量比较，
  * 不硬编码数值，避免内核升级后数值变动导致误判。
+ *
+ * 版式按「结论 → 原因 → 动作」三层排列：标题与一句话说明先回答「怎么了」，
+ * 原因卡回答「为什么」，底部两个按钮回答「现在能做什么」。
  */
 @Composable
 private fun PageErrorView(
@@ -738,10 +743,22 @@ private fun PageErrorView(
     errorCode: Int,
     errorCategory: Int,
     onRetry: () -> Unit,
+    onBackHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val reasons = remember(errorCode, errorCategory) { describeLoadFailure(context, errorCode, errorCategory) }
+    // 图标与副标题按错误类型分开：断网、超时、其它三类已经能覆盖绝大多数情况，
+    // 再细分会让用户读到的都是同一句「加载失败」，反而失去信息量。
+    val offline = errorCode == WebRequestError.ERROR_OFFLINE ||
+        errorCode == WebRequestError.ERROR_NET_INTERRUPT
+    val timeout = errorCode == WebRequestError.ERROR_NET_TIMEOUT
+    val icon = if (offline) Icons.Default.WifiOff else Icons.Rounded.CloudOff
+    val subtitle = when {
+        offline -> stringResource(R.string.err_page_sub_offline)
+        timeout -> stringResource(R.string.err_page_sub_timeout)
+        else -> stringResource(R.string.err_page_sub_generic)
+    }
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         // 不用 weight 撑满：本列已在 verticalScroll 内，滚动容器给子项的是无限高度约束，
         // 再用 weight 会触发测量异常。改用固定留白把内容集中在视觉中心偏上。
@@ -749,25 +766,45 @@ private fun PageErrorView(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(48.dp))
-            // 图标放进圆形色块：纯色图标在大片空白里显得单薄
-            Surface(
-                modifier = Modifier.size(88.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = CircleShape
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.WifiOff,
-                        null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            Spacer(Modifier.height(40.dp))
+            // 双层圆形：外圈淡色底、内圈实底，比单层圆块更有层次，又不至于抢眼
+            Box(contentAlignment = Alignment.Center) {
+                Surface(
+                    modifier = Modifier.size(112.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                    shape = CircleShape
+                ) {}
+                Surface(
+                    modifier = Modifier.size(84.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = CircleShape
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon,
+                            null,
+                            modifier = Modifier.size(38.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            Text(stringResource(R.string.s000), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(22.dp))
+            Text(
+                stringResource(R.string.s000),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(8.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            Spacer(Modifier.height(18.dp))
             // 网址单独放在一个弱化色块里：长链接不会与标题、按钮的文字混在一起，
             // 复制地址或核对是否输错都更容易
             Surface(
@@ -785,22 +822,29 @@ private fun PageErrorView(
                 )
             }
             Spacer(Modifier.height(24.dp))
-            // 排查建议：逐条做成轻量卡片，比项目符号列表更好扫读
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                reasons.forEach { reason ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                    ) {
+            // 排查建议收进一张卡里用分隔线区隔：三条建议各自一张卡时，
+            // 页面会变成一堆同等权重的小方块，反而看不出「这是一组原因说明」
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    reasons.forEachIndexed { index, reason ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 40.dp, end = 12.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
                             Icon(
                                 Icons.Rounded.Info,
                                 null,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.padding(top = 1.dp).size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.width(10.dp))
@@ -819,7 +863,14 @@ private fun PageErrorView(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.s001))
             }
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(10.dp))
+            // 退出当前页：关掉这个标签并回首页，而不是只把错误页滑走留下一个空标签
+            OutlinedButton(onClick = onBackHome, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.ArrowBack, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.compliance_back_home))
+            }
+            Spacer(Modifier.height(40.dp))
         }
     }
 }
@@ -1653,12 +1704,7 @@ private fun PageContent(
             // 关掉最后一个标签（或点叉号）后回首页，而不是停在新建的 about 空白页；
             // 无痕环境同样回首页（首页会自动按当前模式进无痕入口）
             onAllTabsClosed = resetToHome,
-            // 无痕标签被全部关掉：彻底退出无痕（清 Cookie/缓存）后回首页
-            onExitIncognito = { tabId ->
-                resetToHomeImmediately()
-                browserViewModel.close(tabId)
-                browserViewModel.exitIncognito()
-            }
+            onReturnHomeImmediately = resetToHomeImmediately
         )
         Page.TABS -> TabOverview(
             viewModel = browserViewModel,
@@ -3736,7 +3782,7 @@ private fun BookmarkDialog(initial: QuickSite? = null, onSubmit: (QuickSite) -> 
 }
 
 @Composable
-private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings, settingsStore: SettingsStore, onTabs: (Boolean) -> Unit, onDownloads: () -> Unit, onSettings: () -> Unit, onIncognitoHome: () -> Unit, onAllTabsClosed: () -> Unit, onExitIncognito: (String) -> Unit) {
+private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings, settingsStore: SettingsStore, onTabs: (Boolean) -> Unit, onDownloads: () -> Unit, onSettings: () -> Unit, onIncognitoHome: () -> Unit, onAllTabsClosed: () -> Unit, onReturnHomeImmediately: () -> Unit) {
     val tabs by viewModel.tabs.collectAsState()
     val selectedId by viewModel.selectedId.collectAsState()
     val selectedTab = tabs.firstOrNull { it.id == selectedId }
@@ -4019,12 +4065,21 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
                     // 因此 failed 在拦截时恒为 false。
                     val fakeSite = selectedTab.fakeSite
                     val restricted = selectedTab.restrictedEngine
+                    // 完整报错页的「返回首页」：关闭当前标签并回首页。
+                    // 无痕标签关闭前先重置页面，避免退出动画显示切换后的标签。
+                    // 只跳转不关标签的话，用户回到首页后那个失败的标签还挂在后台，
+                    // 下次点标签又回到同一个报错页。
+                    val backHomeAndClose: () -> Unit = {
+                        if (selectedTab.incognito) onReturnHomeImmediately()
+                        viewModel.close(selectedTab.id)
+                        if (!selectedTab.incognito) onAllTabsClosed()
+                    }
                     if (fakeSite != null) {
                         // 假冒站点：只有返回首页，没有继续访问
                         FakeSiteBlockedView(
                             url = selectedTab.url,
                             host = fakeSite,
-                            onBackHome = onAllTabsClosed,
+                            onBackHome = backHomeAndClose,
                             modifier = Modifier.matchParentSize()
                         )
                     } else if (restricted != null) {
@@ -4032,7 +4087,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
                         ComplianceConfirmView(
                             url = selectedTab.url,
                             host = restricted,
-                            onBackHome = onAllTabsClosed,
+                            onBackHome = backHomeAndClose,
                             onContinue = { viewModel.continueToRestricted(selectedTab.url) },
                             modifier = Modifier.matchParentSize()
                         )
@@ -4042,6 +4097,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
                             errorCode = selectedTab.errorCode,
                             errorCategory = selectedTab.errorCategory,
                             onRetry = { viewModel.reload() },
+                            onBackHome = backHomeAndClose,
                             modifier = Modifier.matchParentSize()
                         )
                     }
@@ -4312,6 +4368,7 @@ private fun DownloadsScreen(viewModel: BrowserViewModel, onBack: () -> Unit) {
                         onResume = { viewModel.resumeDownload(item.id) },
                         onRetry = { viewModel.retryDownload(item.id) },
                         onOpen = { openDownload(context, item) },
+                        onShare = { shareDownload(context, item) },
                         onDelete = { deleteTargets = setOf(item.id); showDeleteConfirmation = true },
                         onViewLog = { logItemId = item.id }
                     )
@@ -4508,11 +4565,7 @@ private fun openDownload(context: android.content.Context, item: DownloadEntity)
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     } else source
     val isApk = item.fileName.endsWith(".apk", true)
-    val type = if (isApk) "application/vnd.android.package-archive" else when {
-        item.fileName.endsWith(".pdf", true) -> "application/pdf"
-        item.fileName.endsWith(".zip", true) -> "application/zip"
-        else -> "application/octet-stream"
-    }
+    val type = downloadMimeType(item.fileName)
     val action = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)
     action.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     try {
@@ -4535,9 +4588,49 @@ private fun copyDownloadLink(context: android.content.Context, url: String) {
     clipboard.setPrimaryClip(android.content.ClipData.newPlainText(context.getString(R.string.s155), url))
 }
 
+/** 按扩展名给出 MIME：打开与分享都要用，抽出来避免两处判断不一致 */
+private fun downloadMimeType(fileName: String): String = when {
+    fileName.endsWith(".apk", true) -> "application/vnd.android.package-archive"
+    fileName.endsWith(".pdf", true) -> "application/pdf"
+    fileName.endsWith(".zip", true) -> "application/zip"
+    else -> MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(fileName.substringAfterLast('.', "").lowercase())
+        ?: "application/octet-stream"
+}
+
+/**
+ * 分享已下载的文件。
+ *
+ * 内部存储里的文件不能直接把 file:// 交给别的应用（从 Android 7 起会抛 FileUriExposedException），
+ * 所以先换成 FileProvider 的 content:// 地址，并带上读权限标记。
+ */
+private fun shareDownload(context: android.content.Context, item: DownloadEntity) {
+    val source = Uri.parse(item.targetUri)
+    val uri = if (source.scheme == "file") {
+        val file = runCatching {
+            DownloadTarget.checkedFile(java.io.File(context.filesDir, "downloads"), java.io.File(source.path.orEmpty()))
+        }.getOrElse {
+            Toast.makeText(context, context.getString(R.string.dl_err_cannot_read), Toast.LENGTH_SHORT).show()
+            return
+        }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    } else source
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = downloadMimeType(item.fileName)
+        putExtra(Intent.EXTRA_STREAM, uri)
+        // 主题里带上文件名：邮件、笔记类应用会直接用它当标题
+        putExtra(Intent.EXTRA_SUBJECT, item.fileName)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(Intent.createChooser(send, context.getString(R.string.dl_share)))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, context.getString(R.string.toast_no_file_app), Toast.LENGTH_SHORT).show()
+    }
+}
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DownloadRecordCard(item: DownloadEntity, selected: Boolean, selectionMode: Boolean, onSelect: () -> Unit, onCancel: () -> Unit, onPause: () -> Unit, onResume: () -> Unit, onRetry: () -> Unit, onOpen: () -> Unit, onDelete: () -> Unit, onViewLog: () -> Unit) {
+private fun DownloadRecordCard(item: DownloadEntity, selected: Boolean, selectionMode: Boolean, onSelect: () -> Unit, onCancel: () -> Unit, onPause: () -> Unit, onResume: () -> Unit, onRetry: () -> Unit, onOpen: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit, onViewLog: () -> Unit) {
     val context = LocalContext.current
     val running = item.status == "queued" || item.status == "downloading"
     val paused = item.status == "paused"
@@ -4679,6 +4772,13 @@ private fun DownloadRecordCard(item: DownloadEntity, selected: Boolean, selectio
                             text = { Text(stringResource(R.string.dl_open_file)) },
                             leadingIcon = { Icon(Icons.Default.OpenInNew, null) },
                             onClick = { menuExpanded = false; onOpen() }
+                        )
+                        // 只有已完成的文件才能分享：下载中/暂停时磁盘上是不完整的内容，
+                        // 发给别人只会得到一个打不开的残包
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.dl_share)) },
+                            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+                            onClick = { menuExpanded = false; onShare() }
                         )
                     }
                     DropdownMenuItem(
@@ -7254,8 +7354,12 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
     val context = LocalContext.current
     val isApk = url.substringBefore('?').endsWith(".apk", ignoreCase = true)
     var expectedHash by rememberSaveable { mutableStateOf("") }
-    // 初始名称取 URL 末段；若它是 download.aspx 这类通用入口，则异步探测真实文件名
-    val initialName = url.substringAfterLast('/').substringBefore('?').ifBlank { "download" }
+    // 初始名称取 URL 末段；末段常是百分号编码或乱码，先还原再展示，
+    // 若它是 download.aspx 这类通用入口，则异步探测真实文件名
+    val encodedName = url.substringAfterLast('/').substringBefore('?')
+    val decodedName = runCatching { URLDecoder.decode(encodedName.replace("+", "%2B"), "UTF-8") }
+        .getOrDefault(encodedName)
+    val initialName = DownloadFileName.readable(decodedName).ifBlank { "download" }
     var fileName by remember(url) { mutableStateOf(initialName) }
     // skipResolve：已有本地捕获的响应体时不得再发网络探测——对一次性令牌地址二次请求会 403
     var resolving by remember(url) { mutableStateOf(!skipResolve && DownloadFileName.isGeneric(initialName)) }

@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">Zevi</string>
     <string name="s000">无法访问此网站</string>
+    <string name="err_page_sub_offline">设备当前未连接网络，请检查 Wi-Fi 或移动数据后重试</string>
+    <string name="err_page_sub_timeout">服务器长时间没有响应，可能是网络较慢或站点暂时不可用</string>
+    <string name="err_page_sub_generic">页面加载时出现了问题，可以重新加载，或返回首页换个页面</string>
     <string name="compliance_title">您即将进入大陆搜索引擎</string>
     <string name="compliance_body">该搜索引擎会记录您的搜索内容与设备信息。若您确认继续，相关请求将由您自行发起与承担。</string>
     <string name="compliance_hint">搜索引擎会记录您的搜索内容与设备信息，请勿在其中输入账号密码、身份证号、银行卡等敏感信息；搜索结果中的下载链接与广告请谨慎点击，避免误装来路不明的应用。</string>
@@ -181,6 +184,7 @@
     <string name="dl_log_hash_missing">（未生成）</string>
     <string name="dl_failed_hint">下载失败，可在「更多」中查看日志</string>
     <string name="dl_open_file">打开</string>
+    <string name="dl_share">分享</string>
     <string name="dl_cancel_download">取消下载</string>
     <string name="s159">正在下载</string>
     <string name="s160">已暂停</string>

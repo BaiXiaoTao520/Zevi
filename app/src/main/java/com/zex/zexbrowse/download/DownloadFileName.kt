@@ -31,6 +31,27 @@ import java.net.URLDecoder
  */
 object DownloadFileName {
 
+    /** 修复文件名乱码；如果来源需要 URL 解码，由调用方处理。 */
+    fun readable(name: String): String = repairUtf8Mojibake(name)
+
+    /**
+     * 修正「UTF-8 字节被按 Latin-1 解码」产生的乱码。
+     *
+     * 只在两种解码结果确实不同且不含替换符时才替换，所以正常的 ASCII / 中文名
+     * 一律原样返回；带重音字母的拉丁文件名（café.pdf）重新编码后不是合法 UTF-8，
+     * 也会原样返回，不会被误伤。
+     */
+    private fun repairUtf8Mojibake(name: String): String {
+        // 没有高位字符就不可能是这种乱码，直接跳过
+        if (name.none { it.code in 0x80..0xFF }) return name
+        val latin1 = Charsets.ISO_8859_1
+        if (!latin1.newEncoder().canEncode(name)) return name
+        val bytes = name.toByteArray(latin1)
+        val decoded = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull() ?: return name
+        if (decoded == name || decoded.contains('\uFFFD')) return name
+        return decoded
+    }
+
     /** 常见的「通用下载入口」末段，这类名字不能当作真实文件名 */
     private val genericNames = setOf(
         "download", "download.aspx", "download.php", "download.jsp", "download.do",
@@ -52,7 +73,7 @@ object DownloadFileName {
                 val raw = params.firstOrNull { it.first == key }?.second ?: continue
                 val decoded = runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
                 // path 类参数取末段
-                val candidate = decoded.substringAfterLast('/').substringAfterLast('\\')
+                val candidate = readable(decoded.substringAfterLast('/').substringAfterLast('\\'))
                 if (candidate.isNotBlank() && !isGeneric(candidate) && candidate.contains('.')) return candidate
             }
         }
@@ -189,16 +210,16 @@ object DownloadFileName {
             val raw = match.groupValues[1].trim().trim('"')
             val encoded = raw.substringAfter("''", raw)
             val decoded = runCatching { URLDecoder.decode(encoded, "UTF-8") }.getOrDefault(encoded)
-            if (decoded.isNotBlank()) return decoded.substringAfterLast('/').substringAfterLast('\\')
+            if (decoded.isNotBlank()) return readable(decoded.substringAfterLast('/').substringAfterLast('\\'))
         }
         // filename="名字.zip"
         Regex("filename\\s*=\\s*\"([^\"]+)\"", RegexOption.IGNORE_CASE).find(value)?.let { match ->
             val name = match.groupValues[1].trim()
-            if (name.isNotBlank()) return name.substringAfterLast('/').substringAfterLast('\\')
+            if (name.isNotBlank()) return readable(name.substringAfterLast('/').substringAfterLast('\\'))
         }
         Regex("filename\\s*=\\s*([^;]+)", RegexOption.IGNORE_CASE).find(value)?.let { match ->
             val name = match.groupValues[1].trim().trim('"')
-            if (name.isNotBlank()) return name.substringAfterLast('/').substringAfterLast('\\')
+            if (name.isNotBlank()) return readable(name.substringAfterLast('/').substringAfterLast('\\'))
         }
         return null
     }
