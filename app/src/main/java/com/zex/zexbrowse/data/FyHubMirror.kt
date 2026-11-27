@@ -31,7 +31,7 @@ data class FyHubAsset(
  *   `https://fyhub.cn/{project_id}/{version}/{file_name}`，
  *   由主站完成 PoW 挑战、领取授权并选择下载节点后再跳转真实地址。
  *
- * 不实现文档「方式二」的 `/api/public/v2/api/*` 程序下载链路：它要求客户端自己完成
+ * 不实现文档「方式二」的 `/api/public/v2/api/…` 程序下载链路：它要求客户端自己完成
  * 3072 位 RSA repeated-squaring，服务端下发的 iterations 是数万次量级的单线程模平方，
  * 在手机上是一段很长的纯计算。本应用自身就是浏览器，验证页交给自己的内核跑既符合
  * 文档对前端入口的推荐做法，也不必在应用里重复实现挑战。
