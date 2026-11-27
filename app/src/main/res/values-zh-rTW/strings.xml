@@ -255,7 +255,7 @@
     <string name="s225">隱私</string>
     <string name="s226">追蹤</string>
     <string name="s227">資料</string>
-    <string name="s228">清除快取與 Cookie</string>
+    <string name="s228">儲存空間</string>
     <string name="s229">快取</string>
     <string name="s230">清理</string>
     <string name="s231">網站資料</string>
@@ -377,7 +377,7 @@
     <string name="s348">開啟後強制變暗未套用的網頁以去除白底；關閉後網頁依自身與系統偏好轉譯</string>
     <string name="s349">搜尋與瀏覽</string>
     <string name="s350">關閉後新工作階段不儲存 Cookie</string>
-    <string name="s351">立即清除快取、Cookie 和瀏覽紀錄</string>
+    <string name="s351">查看佔用並清理快取</string>
     <string name="s352">離開應用程式後清除快取、Cookie 與歷史紀錄</string>
     <string name="s353">清除瀏覽器資料？</string>
     <string name="s354">將清除快取、Cookie 和瀏覽紀錄，此操作無法復原。</string>
@@ -797,4 +797,16 @@
     <string name="mirrorchyan_download_sub">國內 CDN 加速，跳轉網頁完成下載</string>
     <string name="browser_download">瀏覽器下載</string>
     <string name="browser_download_sub">用瀏覽器下載 GitHub 直鏈安裝包</string>
+    <string name="storage_app_used">Zevi 已用空間</string>
+    <string name="storage_ratio">佔手機儲存的 %1$s</string>
+    <string name="storage_device">手機儲存 %1$s · 可用 %2$s</string>
+    <string name="storage_breakdown">佔用明細</string>
+    <string name="storage_cache">快取</string>
+    <string name="storage_downloads">下載檔案</string>
+    <string name="storage_app_data">應用程式資料</string>
+    <string name="storage_clear_cache">清理快取</string>
+    <string name="storage_clear_all">清除快取與 Cookie</string>
+    <string name="storage_cleared">快取已清理</string>
+    <string name="storage_scanning">正在統計…</string>
+
 </resources>

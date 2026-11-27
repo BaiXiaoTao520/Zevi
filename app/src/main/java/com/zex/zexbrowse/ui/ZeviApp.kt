@@ -96,6 +96,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tab
 import androidx.compose.material.icons.filled.Computer
@@ -143,7 +144,6 @@ import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.VolunteerActivism
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
@@ -168,6 +168,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -294,7 +295,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class Page { HOME, APP_RECOMMENDATIONS, BROWSER, INCOGNITO, TABS, SETTINGS, BOOKMARKS, DOWNLOADS, HISTORY, DOWNLOAD_DIRECTORY, GENERAL_SETTINGS, LANGUAGE, SITE_SETTINGS, COOKIE_SETTINGS, HTTPS_ONLY, WEB_PERMISSIONS, SECURITY, ADBLOCK, NOTIFICATION, ADVANCED_SETTINGS, DEBUG, NETWORK_DIAGNOSTICS, SEARCH_ENGINE, USER_AGENT, CUSTOM_USER_AGENT, CLIPBOARD_PERMISSION, MIC_PERMISSION, EXTERNAL_APP_PERMISSION, ABOUT }
+enum class Page { HOME, APP_RECOMMENDATIONS, BROWSER, INCOGNITO, TABS, SETTINGS, BOOKMARKS, DOWNLOADS, HISTORY, DOWNLOAD_DIRECTORY, GENERAL_SETTINGS, LANGUAGE, SITE_SETTINGS, COOKIE_SETTINGS, STORAGE, HTTPS_ONLY, WEB_PERMISSIONS, SECURITY, ADBLOCK, NOTIFICATION, ADVANCED_SETTINGS, DEBUG, NETWORK_DIAGNOSTICS, SEARCH_ENGINE, USER_AGENT, CUSTOM_USER_AGENT, CLIPBOARD_PERMISSION, MIC_PERMISSION, EXTERNAL_APP_PERMISSION, ABOUT }
 
 data class QuickSite(val title: String, val url: String, val icon: String)
 
@@ -1521,11 +1522,11 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
             }
             // 上次崩溃日志展示：启动可读，支持一键复制 / 清除
             previousCrashLog?.let { log ->
-                AlertDialog(
+                AppDialog(
                     onDismissRequest = { CrashReporter.clear(context); previousCrashLog = null },
                     title = { Text(stringResource(R.string.crash_dialog_title)) },
                     text = {
-                        Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                        Column(Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.crash_dialog_hint), style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(8.dp))
                             Text(log, style = MaterialTheme.typography.bodySmall)
@@ -1564,7 +1565,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                 )
             }
             if (showFirstRunStorageHint && startupUpdate == null) {
-                AlertDialog(
+                AppDialog(
                     onDismissRequest = { showFirstRunStorageHint = false; scope.launch { settingsStore.storageHintShown(true) } },
                     title = { Text(stringResource(R.string.s038)) },
                     text = { Text(stringResource(R.string.s039)) },
@@ -1583,7 +1584,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                     showDefaultBrowserPrompt = false
                     scope.launch { settingsStore.defaultBrowserHintShown(true) }
                 }
-                AlertDialog(
+                AppDialog(
                     onDismissRequest = dismissDefaultBrowserPrompt,
                     title = { Text(stringResource(R.string.s042)) },
                     text = { Text(stringResource(R.string.s043)) },
@@ -1613,7 +1614,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                         if (allow) callback?.grant(null, microphoneId) else callback?.reject()
                     }
                 }
-                AlertDialog(
+                AppDialog(
                     onDismissRequest = { finishMic(false, false) },
                     title = { Text(stringResource(R.string.s045)) },
                     text = { Text(stringResource(R.string.s046, micSite)) },
@@ -1733,6 +1734,7 @@ private fun PageContent(
             onLanguage = onLanguage,
             onSiteSettings = { navigate(Page.SITE_SETTINGS) },
             onCookieSettings = { navigate(Page.COOKIE_SETTINGS) },
+            onStorage = { navigate(Page.STORAGE) },
             onHttpsOnly = { navigate(Page.HTTPS_ONLY) },
             onWebPermissions = { navigate(Page.WEB_PERMISSIONS) },
             onSecurity = { navigate(Page.SECURITY) },
@@ -1779,12 +1781,17 @@ private fun PageContent(
             settings = settings,
             setCookie = { scope.launch { settingsStore.cookies(it) } },
             setClearOnExit = { enabled, cookies, cache, history -> scope.launch { settingsStore.clearOnExit(enabled, cookies, cache, history) } },
-            clearBrowserData = {
+            onHttpsOnly = { navigate(Page.HTTPS_ONLY) },
+            onStorage = { navigate(Page.STORAGE) },
+            onBack = goBack
+        )
+        Page.STORAGE -> StorageScreen(
+            clearBrowserData = { onComplete ->
                 browserViewModel.clearBrowserData { success ->
                     Toast.makeText(context, context.getString(if (success) R.string.s050 else R.string.clear_data_failed), Toast.LENGTH_SHORT).show()
+                    onComplete()
                 }
             },
-            onHttpsOnly = { navigate(Page.HTTPS_ONLY) },
             onBack = goBack
         )
         Page.HTTPS_ONLY -> HttpsOnlyScreen(
@@ -3243,7 +3250,7 @@ private fun SecurityDetailDialog(
         SecurityScanner.RiskLevel.SUSPICIOUS -> context.getString(R.string.risk_suspicious)
         SecurityScanner.RiskLevel.DANGEROUS -> context.getString(R.string.risk_dangerous)
     }
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -3277,7 +3284,7 @@ private fun RiskySiteDialog(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onBack,
         icon = { Icon(Icons.Rounded.Phishing, null, tint = MaterialTheme.colorScheme.error) },
         title = { Text(assessment.reason(context).ifBlank { stringResource(R.string.risk_default_title) }) },
@@ -3767,7 +3774,7 @@ private fun BookmarkDialog(initial: QuickSite? = null, onSubmit: (QuickSite) -> 
     var title by remember(initial) { mutableStateOf(initial?.title ?: "") }
     var url by remember(initial) { mutableStateOf(initial?.url ?: "") }
     val isEdit = initial != null
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (isEdit) R.string.s096 else R.string.s099)) },
         text = {
@@ -4123,7 +4130,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     }
 
     if (showNewTabDialog) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { showNewTabDialog = false },
             title = { Text(stringResource(R.string.s113)) },
             text = { Text(stringResource(R.string.s122)) },
@@ -4173,7 +4180,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
         )
     }
     if (hashResult != null) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { hashResult = null },
             title = { Text(stringResource(R.string.s126)) },
             text = { Text(hashResult!!) },
@@ -4183,7 +4190,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     // 先取出局部变量：pendingExternalAppUri 是委托属性，不能直接做智能转换
     val pendingUri = pendingExternalAppUri
     if (pendingUri != null) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { pendingExternalAppUri = null; pendingExternalApp = null },
             title = { Text(stringResource(R.string.s128)) },
             text = { Text(stringResource(R.string.s129, pendingUri)) },
@@ -4199,7 +4206,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
             clipboardReadSite = null
             clipboardReadCallback = null
         }
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { finishClipboard(false, false) },
             title = { Text(stringResource(R.string.s130)) },
             text = { Text(stringResource(R.string.s131, siteHost(site))) },
@@ -4304,7 +4311,7 @@ private fun TabOverview(viewModel: BrowserViewModel, incognitoOnly: Boolean, onI
         }
     }
     if (showNewTabDialog) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { showNewTabDialog = false },
             title = { Text(stringResource(R.string.s113)) },
             text = { Text(stringResource(R.string.s122)) },
@@ -4391,7 +4398,7 @@ private fun DownloadsScreen(viewModel: BrowserViewModel, onBack: () -> Unit) {
     logItem?.let { item ->
         DownloadLogSheet(item = item, onDismiss = { logItemId = null })
     }
-    if (showDeleteConfirmation) AlertDialog(onDismissRequest = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }, title = { Text(stringResource(R.string.s142)) }, text = { Column { Text(stringResource(R.string.s143, deleteTargets.size)) ; CheckRow(stringResource(R.string.s144), deleteFiles) { deleteFiles = it } } }, confirmButton = { TextButton(onClick = { downloads.filter { it.id in deleteTargets }.forEach { viewModel.deleteDownload(it.id, it.targetUri, deleteFiles) }; Toast.makeText(context, context.getString(R.string.s050), Toast.LENGTH_SHORT).show(); selectedIds = emptySet(); deleteTargets = emptySet(); showDeleteConfirmation = false }) { Text(stringResource(R.string.s145)) } }, dismissButton = { TextButton(onClick = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }) { Text(stringResource(R.string.s071)) } })
+    if (showDeleteConfirmation) AppDialog(onDismissRequest = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }, title = { Text(stringResource(R.string.s142)) }, text = { Column { Text(stringResource(R.string.s143, deleteTargets.size)) ; CheckRow(stringResource(R.string.s144), deleteFiles) { deleteFiles = it } } }, confirmButton = { TextButton(onClick = { downloads.filter { it.id in deleteTargets }.forEach { viewModel.deleteDownload(it.id, it.targetUri, deleteFiles) }; Toast.makeText(context, context.getString(R.string.s050), Toast.LENGTH_SHORT).show(); selectedIds = emptySet(); deleteTargets = emptySet(); showDeleteConfirmation = false }) { Text(stringResource(R.string.s145)) } }, dismissButton = { TextButton(onClick = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }) { Text(stringResource(R.string.s071)) } })
 }
 
 /**
@@ -4820,6 +4827,7 @@ private fun SettingsScreen(
     onLanguage: () -> Unit,
     onSiteSettings: () -> Unit,
     onCookieSettings: () -> Unit,
+    onStorage: () -> Unit,
     onHttpsOnly: () -> Unit,
     onWebPermissions: () -> Unit,
     onSecurity: () -> Unit,
@@ -4858,7 +4866,7 @@ private fun SettingsScreen(
         SettingSearchItem(stringResource(R.string.s213), SearchGroup.SITE, listOf("搜索", "引擎", "百度", "必应", "DuckDuckGo", "谷歌", "搜索引擎", "search", "engine", "google", "baidu", "bing"), onSiteSettings),
         SettingSearchItem(stringResource(R.string.s219), SearchGroup.SITE, listOf("浏览器标识", "UA", "User-Agent", "桌面", "标识", "网页标识", "桌面模式", "user agent", "desktop"), onSiteSettings),
         SettingSearchItem(stringResource(R.string.s224), SearchGroup.PRIVACY, listOf("Cookie", "追踪", "隐私", "数据", "Cookies", "tracking", "privacy", "data"), onCookieSettings),
-        SettingSearchItem(stringResource(R.string.s228), SearchGroup.PRIVACY, listOf("缓存", "清除", "Cookie", "数据", "清理", "站点数据", "cache", "clear", "data", "site"), onCookieSettings),
+        SettingSearchItem(stringResource(R.string.s228), SearchGroup.PRIVACY, listOf("存储", "空间", "占用", "缓存", "清除", "Cookie", "数据", "清理", "storage", "space", "cache", "clear", "data"), onStorage),
         SettingSearchItem(stringResource(R.string.s232), SearchGroup.PRIVACY, listOf("退出", "清除", "数据", "无痕", "清理", "退出时清除", "exit", "clear", "incognito"), onCookieSettings),
         SettingSearchItem("HTTPS-Only", SearchGroup.PRIVACY, listOf("HTTPS", "加密", "安全", "协议", "Only", "强制加密", "隐私标签页", "encrypt", "secure", "protocol", "private"), onHttpsOnly),
         SettingSearchItem(stringResource(R.string.s240), SearchGroup.SECURITY, listOf("安全", "防护", "拦截", "诈骗", "木马", "护盾", "钓鱼", "风险", "银狐", "security", "protection", "block", "phishing", "malware", "risk"), onSecurity),
@@ -5209,9 +5217,66 @@ private fun resolveColorScheme(settings: BrowserSettings, dark: Boolean, context
     }
 }
 
+/**
+ * 统一的应用内对话框外壳。
+ *
+ * 参数与 AlertDialog 对齐，调用方写法完全不变，只是容器从居中对话框换成底部面板：
+ * 上两角 28dp 圆角、顶部拖拽横条、点遮罩收起，与语言选择、更新说明、推荐详情保持一致。
+ *
+ * 按钮仍由调用方传入，保持原有的文案与点击行为；这里只负责把它们排到面板底部右侧，
+ * 顺序与 AlertDialog 一致（取消在左、确认在右）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit = {},
+    dismissButton: (@Composable () -> Unit)? = null,
+    icon: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { icon() }
+            }
+            if (title != null) {
+                Box(Modifier.fillMaxWidth()) { title() }
+            }
+            if (text != null) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) { text() }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                dismissButton?.invoke()
+                confirmButton()
+            }
+        }
+    }
+}
+
 @Composable
 private fun ConfirmDialog(title: String, message: String, confirm: () -> Unit, dismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = confirm) { Text(stringResource(R.string.s127)) } }, dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } })
+    AppDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = confirm) { Text(stringResource(R.string.s127)) } }, dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } })
 }
 
 private fun searchEngineLabel(context: Context, settings: BrowserSettings) = when {
@@ -5460,7 +5525,7 @@ private fun CustomSearchEngineDialog(
     val isEdit = initial != null
     // URL 必须含 {query} 占位符，否则搜索词无处可去
     val valid = title.isNotBlank() && url.contains("{query}")
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (isEdit) R.string.s324 else R.string.s321)) },
         text = {
@@ -5756,7 +5821,7 @@ private fun CustomUserAgentDialog(initial: CustomUserAgent? = null, onSubmit: (C
     var title by remember(initial) { mutableStateOf(initial?.title ?: "") }
     var ua by remember(initial) { mutableStateOf(initial?.ua ?: "") }
     val isEdit = initial != null
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(if (isEdit) R.string.s334 else R.string.s335)) },
         text = {
@@ -5907,12 +5972,11 @@ private fun CookieSettingsScreen(
     settings: BrowserSettings,
     setCookie: (Boolean) -> Unit,
     setClearOnExit: (Boolean, Boolean, Boolean, Boolean) -> Unit,
-    clearBrowserData: () -> Unit,
     onHttpsOnly: () -> Unit,
+    onStorage: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var showClearConfirmation by remember { mutableStateOf(false) }
     var showExitOptions by remember { mutableStateOf(false) }
     var exitCookies by remember(settings.clearCookiesOnExit) { mutableStateOf(settings.clearCookiesOnExit) }
     var exitCache by remember(settings.clearCacheOnExit) { mutableStateOf(settings.clearCacheOnExit) }
@@ -5922,14 +5986,13 @@ private fun CookieSettingsScreen(
         item {
             SettingsNavCard("HTTPS-Only", httpsOnlySubtitle(context, settings), Icons.Rounded.Lock, onHttpsOnly, colorIndex = 5)
         }
-        item { SettingsNavCard(stringResource(R.string.s228), stringResource(R.string.s351), Icons.Default.Delete, { showClearConfirmation = true }, colorIndex = 4) }
+        // 存储空间单独成页：原来这里直接弹一个「清除缓存」确认框，
+        // 用户既看不到到底占了多少，也没法只清缓存而不动 Cookie
+        item { SettingsNavCard(stringResource(R.string.s228), stringResource(R.string.s351), Icons.Default.Delete, onStorage, colorIndex = 4) }
         item { SwitchRow(stringResource(R.string.s232), stringResource(R.string.s352), settings.clearOnExit, { showExitOptions = true }, leading = Icons.Default.Delete) }
     }
-    if (showClearConfirmation) ConfirmDialog(stringResource(R.string.s353), stringResource(R.string.s354), {
-        clearBrowserData(); showClearConfirmation = false
-    }, { showClearConfirmation = false })
     if (showExitOptions) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { showExitOptions = false },
             title = { Text(stringResource(R.string.s232)) },
             text = {
@@ -5947,6 +6010,242 @@ private fun CookieSettingsScreen(
             },
             dismissButton = { TextButton(onClick = { showExitOptions = false }) { Text(stringResource(R.string.s071)) } }
         )
+    }
+}
+
+/** 一次存储统计的结果：各目录实际占用与设备容量，单位均为字节 */
+private data class StorageStats(
+    val cache: Long,
+    val downloads: Long,
+    val appData: Long,
+    val deviceTotal: Long,
+    val deviceFree: Long
+) {
+    /** 应用自身占用：缓存 + 下载文件 + 其余应用数据 */
+    val appUsed: Long get() = cache + downloads + appData
+}
+
+/** 递归统计目录占用；目录不存在时返回 0 */
+private fun File.sizeRecursively(): Long =
+    if (!exists()) 0L else walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+/**
+ * 统计真实占用。
+ *
+ * 全部读自文件系统本身，不做估算：
+ * - 缓存 = cacheDir；
+ * - 下载文件 = filesDir/downloads（用户选外部目录时这部分不计入，那属于共享存储）；
+ * - 应用数据 = filesDir 减去下载目录，再加上数据库目录；
+ * - 设备容量取自 StatFs 的数据分区，与系统「存储」页口径一致。
+ */
+private fun readStorageStats(context: android.content.Context): StorageStats {
+    val files = context.filesDir
+    val downloadsDir = File(files, "downloads")
+    val downloads = downloadsDir.sizeRecursively()
+    val databases = context.getDatabasePath("zexbrowse.db").parentFile?.sizeRecursively() ?: 0L
+    val appData = (files.sizeRecursively() - downloads).coerceAtLeast(0L) + databases
+    val cache = context.cacheDir.sizeRecursively()
+    val stat = runCatching { android.os.StatFs(files.absolutePath) }.getOrNull()
+    return StorageStats(
+        cache = cache,
+        downloads = downloads,
+        appData = appData,
+        deviceTotal = stat?.totalBytes ?: 0L,
+        deviceFree = stat?.availableBytes ?: 0L
+    )
+}
+
+/**
+ * 清理缓存目录。
+ *
+ * 跳过 download-capture：那是正在进行的下载用来暂存响应体的目录，
+ * 删掉会让后台任务写到一半的文件消失。
+ */
+private fun clearAppCache(context: android.content.Context) {
+    context.cacheDir.listFiles()?.forEach { file ->
+        if (file.name == "download-capture") return@forEach
+        runCatching { file.deleteRecursively() }
+    }
+}
+
+private fun formatSize(context: android.content.Context, bytes: Long): String =
+    android.text.format.Formatter.formatFileSize(context, bytes)
+
+/**
+ * 存储空间页。
+ *
+ * 三块内容：总占用（含占设备比例）、占用明细、清理动作。
+ * 所有数字都来自 [readStorageStats] 的实时统计，清理后立即重算，
+ * 不做「假装清了」的乐观更新。
+ */
+@Composable
+private fun StorageScreen(
+    clearBrowserData: (onComplete: () -> Unit) -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var stats by remember { mutableStateOf<StorageStats?>(null) }
+    var scanning by remember { mutableStateOf(true) }
+    var showClearConfirmation by remember { mutableStateOf(false) }
+
+    val refresh: () -> Unit = {
+        scope.launch {
+            scanning = true
+            val next = withContext(Dispatchers.IO) { readStorageStats(context) }
+            stats = next
+            scanning = false
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text(stringResource(R.string.s228)) },
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, stringResource(R.string.s063)) } }
+        )
+    }) { padding ->
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            val current = stats
+            // 总览卡：一个数字回答「占了多少」，下面小字给比例与设备容量
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Text(stringResource(R.string.storage_app_used), style = MaterialTheme.typography.titleSmall)
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        if (current == null) stringResource(R.string.storage_scanning) else formatSize(context, current.appUsed),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (current == null || current.deviceTotal <= 0L) {
+                            stringResource(R.string.storage_scanning)
+                        } else {
+                            stringResource(R.string.storage_ratio, formatPercent(current.appUsed, current.deviceTotal))
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (current != null && current.deviceTotal > 0L) {
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { (current.appUsed.toFloat() / current.deviceTotal).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            stringResource(
+                                R.string.storage_device,
+                                formatSize(context, current.deviceTotal),
+                                formatSize(context, current.deviceFree)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            // 明细卡：三行等权信息，用分隔线区隔
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(R.string.storage_breakdown),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 6.dp)
+                    )
+                    StorageRow(stringResource(R.string.storage_cache), current?.let { formatSize(context, it.cache) })
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    StorageRow(stringResource(R.string.storage_downloads), current?.let { formatSize(context, it.downloads) })
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    StorageRow(stringResource(R.string.storage_app_data), current?.let { formatSize(context, it.appData) })
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { clearAppCache(context) }
+                        Toast.makeText(context, context.getString(R.string.storage_cleared), Toast.LENGTH_SHORT).show()
+                        val next = withContext(Dispatchers.IO) { readStorageStats(context) }
+                        stats = next
+                    }
+                },
+                enabled = !scanning,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.storage_clear_cache))
+            }
+            OutlinedButton(
+                onClick = { showClearConfirmation = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.storage_clear_all))
+            }
+        }
+    }
+
+    if (showClearConfirmation) {
+        ConfirmDialog(stringResource(R.string.s353), stringResource(R.string.s354), {
+            showClearConfirmation = false
+            clearBrowserData(refresh)
+        }, { showClearConfirmation = false })
+    }
+}
+
+/** 明细行：左侧名称、右侧大小，大小未统计完时显示占位 */
+@Composable
+private fun StorageRow(label: String, value: String?) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            value ?: stringResource(R.string.storage_scanning),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 占比文案：极小时不显示成 0%，避免让人以为没占空间 */
+private fun formatPercent(part: Long, total: Long): String {
+    if (total <= 0L) return "0%"
+    val percent = part.toDouble() / total * 100
+    return when {
+        percent <= 0.0 -> "0%"
+        percent < 0.1 -> "<0.1%"
+        percent < 10 -> String.format(java.util.Locale.US, "%.1f%%", percent)
+        else -> String.format(java.util.Locale.US, "%.0f%%", percent)
     }
 }
 
@@ -6947,7 +7246,7 @@ private fun DebugScreen(
     }
 
     if (showCrashLog && crashLog != null) {
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { showCrashLog = false },
             title = { Text(stringResource(R.string.debug_crash_title)) },
             text = {
@@ -7370,7 +7669,7 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
         if (resolved != null) fileName = resolved
         resolving = false
     }
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.s393)) },
         text = {
@@ -7685,7 +7984,7 @@ private fun AboutScreen(
 
     update?.let { release -> UpdateDialog(release = release, onDismiss = { update = null }) }
     message?.let { content ->
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { message = null },
             title = { Text(stringResource(R.string.s287)) },
             text = { Text(content) },

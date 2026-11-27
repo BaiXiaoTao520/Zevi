@@ -255,7 +255,7 @@
     <string name="s225">隐私</string>
     <string name="s226">追踪</string>
     <string name="s227">数据</string>
-    <string name="s228">清除缓存与 Cookie</string>
+    <string name="s228">存储空间</string>
     <string name="s229">缓存</string>
     <string name="s230">清理</string>
     <string name="s231">站点数据</string>
@@ -377,7 +377,7 @@
     <string name="s348">开启后强制暗化未适配网页去除白底；关闭后网页按自身与系统偏好渲染</string>
     <string name="s349">搜索与浏览</string>
     <string name="s350">关闭后新会话不保存 Cookie</string>
-    <string name="s351">立即清除缓存、Cookie 和浏览历史</string>
+    <string name="s351">查看占用并清理缓存</string>
     <string name="s352">离开应用后清除缓存、Cookie 与历史记录</string>
     <string name="s353">清除浏览器数据？</string>
     <string name="s354">将清除缓存、Cookie 和浏览历史，此操作无法撤销。</string>
@@ -797,4 +797,16 @@
     <string name="mirrorchyan_download_sub">国内 CDN 加速，跳转网页完成下载</string>
     <string name="browser_download">浏览器下载</string>
     <string name="browser_download_sub">用浏览器下载 GitHub 直链安装包</string>
+    <string name="storage_app_used">Zevi 已用空间</string>
+    <string name="storage_ratio">占手机存储的 %1$s</string>
+    <string name="storage_device">手机存储 %1$s · 可用 %2$s</string>
+    <string name="storage_breakdown">占用明细</string>
+    <string name="storage_cache">缓存</string>
+    <string name="storage_downloads">下载文件</string>
+    <string name="storage_app_data">应用数据</string>
+    <string name="storage_clear_cache">清理缓存</string>
+    <string name="storage_clear_all">清除缓存与 Cookie</string>
+    <string name="storage_cleared">缓存已清理</string>
+    <string name="storage_scanning">正在统计…</string>
+
 </resources>

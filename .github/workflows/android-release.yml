@@ -1,9 +1,15 @@
 name: Android 自动构建与发布
 
+# 只保留手动触发：推送到 main 不再直接发版。
+# 日常开发与合并走 android-beta.yml，产物只上传到 Actions 供下载；
+# 测试通过后再回到这里手动执行，才会打标签并发布到 Releases。
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: '输入 release 确认发布到 Releases'
+        required: true
+        default: ''
 
 permissions:
   contents: write
@@ -17,6 +23,15 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
+      - name: 校验发布确认
+        env:
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$RELEASE_CONFIRM" != release ]; then
+            echo "未确认发布：请在手动运行本工作流时把 confirm 填为 release。"
+            exit 1
+          fi
+
       - name: 检出源码
         uses: actions/checkout@v5
         with:

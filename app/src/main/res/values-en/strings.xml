@@ -255,7 +255,7 @@
     <string name="s225">Privacy</string>
     <string name="s226">Tracking</string>
     <string name="s227">Data</string>
-    <string name="s228">Clear cache and cookies</string>
+    <string name="s228">Storage</string>
     <string name="s229">Cache</string>
     <string name="s230">Cleanup</string>
     <string name="s231">Site data</string>
@@ -377,7 +377,7 @@
     <string name="s348">When on, unadapted pages are forced dark to remove white backgrounds; when off, pages follow their own and the system\'s preference.</string>
     <string name="s349">Search and browsing</string>
     <string name="s350">When off, new sessions will not save cookies</string>
-    <string name="s351">Immediately clear cache, cookies and history</string>
+    <string name="s351">Check usage and clear cache</string>
     <string name="s352">Clear cache, cookies and history after leaving the app</string>
     <string name="s353">Clear browsing data?</string>
     <string name="s354">This clears cache, cookies and history. It cannot be undone.</string>
@@ -797,4 +797,16 @@
     <string name="mirrorchyan_download_sub">Mainland CDN acceleration; completes in the browser</string>
     <string name="browser_download">Browser download</string>
     <string name="browser_download_sub">Download the GitHub direct-link APK in a browser</string>
+    <string name="storage_app_used">Space used by Zevi</string>
+    <string name="storage_ratio">%1$s of device storage</string>
+    <string name="storage_device">Device storage %1$s · %2$s free</string>
+    <string name="storage_breakdown">Usage breakdown</string>
+    <string name="storage_cache">Cache</string>
+    <string name="storage_downloads">Downloads</string>
+    <string name="storage_app_data">App data</string>
+    <string name="storage_clear_cache">Clear cache</string>
+    <string name="storage_clear_all">Clear cache and cookies</string>
+    <string name="storage_cleared">Cache cleared</string>
+    <string name="storage_scanning">Calculating…</string>
+
 </resources>

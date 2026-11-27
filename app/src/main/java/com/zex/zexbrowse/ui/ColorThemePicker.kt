@@ -23,9 +23,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -332,6 +338,7 @@ private fun hsvOf(c: Color): FloatArray {
  * 底部为取色面板（可直接点按/拖动），同时保留 HEX 输入框供精确输入。
  * 两者双向同步：拖色板会更新 HEX，改 HEX 也会更新色板。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CustomColorDialog(
     initialHex: String,
@@ -344,10 +351,26 @@ internal fun CustomColorDialog(
     var editingHex by remember { mutableStateOf(false) }
     val parsed = parseColorOrNull(hex)
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.color_custom_title)) },
-        text = {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                stringResource(R.string.color_custom_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.color_custom_pick), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
                 ColorPickerPanel(color = current) { picked ->
@@ -375,13 +398,19 @@ internal fun CustomColorDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = parsed != null,
-                onClick = { onConfirm((parsed ?: defaultCustomSeed).toHexString()) }
-            ) { Text(stringResource(R.string.common_confirm)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.s071)) } }
-    )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.s071))
+                }
+                Button(
+                    enabled = parsed != null,
+                    onClick = { onConfirm((parsed ?: defaultCustomSeed).toHexString()) },
+                    modifier = Modifier.weight(1f)
+                ) { Text(stringResource(R.string.common_confirm)) }
+            }
+        }
+    }
 }
