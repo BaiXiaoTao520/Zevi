@@ -1526,7 +1526,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                     onDismissRequest = { CrashReporter.clear(context); previousCrashLog = null },
                     title = { Text(stringResource(R.string.crash_dialog_title)) },
                     text = {
-                        Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                        Column(Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.crash_dialog_hint), style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(8.dp))
                             Text(log, style = MaterialTheme.typography.bodySmall)
@@ -1786,9 +1786,10 @@ private fun PageContent(
             onBack = goBack
         )
         Page.STORAGE -> StorageScreen(
-            clearBrowserData = {
+            clearBrowserData = { onComplete ->
                 browserViewModel.clearBrowserData { success ->
                     Toast.makeText(context, context.getString(if (success) R.string.s050 else R.string.clear_data_failed), Toast.LENGTH_SHORT).show()
+                    onComplete()
                 }
             },
             onBack = goBack
@@ -5254,7 +5255,12 @@ private fun AppDialog(
                 Box(Modifier.fillMaxWidth()) { title() }
             }
             if (text != null) {
-                Box(Modifier.fillMaxWidth()) { text() }
+                Box(
+                    Modifier.fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) { text() }
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -6029,14 +6035,15 @@ private fun File.sizeRecursively(): Long =
  * 全部读自文件系统本身，不做估算：
  * - 缓存 = cacheDir；
  * - 下载文件 = filesDir/downloads（用户选外部目录时这部分不计入，那属于共享存储）；
- * - 应用数据 = filesDir 减去下载目录；
+ * - 应用数据 = filesDir 减去下载目录，再加上数据库目录；
  * - 设备容量取自 StatFs 的数据分区，与系统「存储」页口径一致。
  */
 private fun readStorageStats(context: android.content.Context): StorageStats {
     val files = context.filesDir
     val downloadsDir = File(files, "downloads")
     val downloads = downloadsDir.sizeRecursively()
-    val appData = (files.sizeRecursively() - downloads).coerceAtLeast(0L)
+    val databases = context.getDatabasePath("zexbrowse.db").parentFile?.sizeRecursively() ?: 0L
+    val appData = (files.sizeRecursively() - downloads).coerceAtLeast(0L) + databases
     val cache = context.cacheDir.sizeRecursively()
     val stat = runCatching { android.os.StatFs(files.absolutePath) }.getOrNull()
     return StorageStats(
@@ -6073,7 +6080,7 @@ private fun formatSize(context: android.content.Context, bytes: Long): String =
  */
 @Composable
 private fun StorageScreen(
-    clearBrowserData: () -> Unit,
+    clearBrowserData: (onComplete: () -> Unit) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -6208,9 +6215,8 @@ private fun StorageScreen(
 
     if (showClearConfirmation) {
         ConfirmDialog(stringResource(R.string.s353), stringResource(R.string.s354), {
-            clearBrowserData()
             showClearConfirmation = false
-            refresh()
+            clearBrowserData(refresh)
         }, { showClearConfirmation = false })
     }
 }

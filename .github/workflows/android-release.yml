@@ -24,10 +24,13 @@ jobs:
 
     steps:
       - name: 校验发布确认
-        if: github.event.inputs.confirm != 'release'
+        env:
+          RELEASE_CONFIRM: ${{ inputs.confirm }}
         run: |
-          echo "未确认发布：请在手动运行本工作流时把 confirm 填为 release。"
-          exit 1
+          if [ "$RELEASE_CONFIRM" != release ]; then
+            echo "未确认发布：请在手动运行本工作流时把 confirm 填为 release。"
+            exit 1
+          fi
 
       - name: 检出源码
         uses: actions/checkout@v5

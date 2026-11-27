@@ -76,18 +76,14 @@ jobs:
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: 生成 APK SHA-256 校验文件
-        run: |
-          cd app/build/outputs/apk/release
-          sha256sum app-release.apk > SHA256SUMS.txt
-
       - name: 重命名产物
         id: artifact
         run: |
           NAME="Zevi-${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}-${{ steps.version.outputs.short }}"
           mkdir -p "$RUNNER_TEMP/out"
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/$NAME.apk"
-          cp app/build/outputs/apk/release/SHA256SUMS.txt "$RUNNER_TEMP/out/$NAME-SHA256SUMS.txt"
+          cd "$RUNNER_TEMP/out"
+          sha256sum -- "$NAME.apk" > SHA256SUMS.txt
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - name: 上传 Beta 产物到 Actions
