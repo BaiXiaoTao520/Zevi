@@ -172,6 +172,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.WavyProgressIndicatorDefaults
@@ -5219,11 +5220,14 @@ private fun resolveColorScheme(settings: BrowserSettings, dark: Boolean, context
 /**
  * 统一的应用内对话框外壳。
  *
- * 参数与 AlertDialog 对齐，调用方写法完全不变，只是容器从居中对话框换成底部面板：
- * 上两角 28dp 圆角、顶部拖拽横条、点遮罩收起，与语言选择、更新说明、推荐详情保持一致。
+ * 参数与 AlertDialog 对齐，调用方写法完全不变，只是容器从居中对话框换成底部面板。
+ * 版式分三层：标题、内容框、按钮行。
  *
- * 按钮仍由调用方传入，保持原有的文案与点击行为；这里只负责把它们排到面板底部右侧，
- * 顺序与 AlertDialog 一致（取消在左、确认在右）。
+ * - 标题统一升到 titleMedium 半粗：调用方传的多是裸 Text，不套文字样式的话
+ *   标题与正文同号，面板看起来像一段没重点的说明文字；
+ * - 内容套一层 surfaceContainerHigh 的圆角框：浅底面板里正文直接铺在背景上会糊成一片，
+ *   有框才能看出「这是说明内容」；
+ * - 按钮左右各占一半：原来右对齐的两个文字按钮在小面板里显得零散，等宽后像正常的一对操作。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -5251,26 +5255,145 @@ private fun AppDialog(
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { icon() }
             }
             if (title != null) {
-                Box(Modifier.fillMaxWidth()) { title() }
+                CompositionLocalProvider(
+                    LocalTextStyle provides MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                ) {
+                    Box(Modifier.fillMaxWidth()) { title() }
+                }
             }
             if (text != null) {
-                Box(Modifier.fillMaxWidth()) { text() }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium) {
+                        Box(Modifier.fillMaxWidth().padding(14.dp)) { text() }
+                    }
+                }
             }
             Row(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                dismissButton?.invoke()
-                confirmButton()
+                if (dismissButton != null) {
+                    // 居中而不是贴左：文字按钮本身宽度有限，放在半宽盒子的左端会显得偏
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { dismissButton() }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { confirmButton() }
+                } else {
+                    // 只有一个动作时铺满整行，不留半格空白
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { confirmButton() }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 二次确认面板：是否要执行某个不可撤销的操作。
+ *
+ * 与 [AppDialog] 分开是因为这类面板结构固定（图标 + 标题 + 说明 + 两个按钮），
+ * 交给通用外壳只能拼出「一段文字加两个按钮」，看着简陋；这里把结构写死，
+ * 危险操作统一用 error 配色，用户一眼能看出这不是普通确认。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfirmSheet(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    confirmText: String = stringResource(R.string.s127),
+    dismissText: String = stringResource(R.string.s071),
+    destructive: Boolean = true
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val accent = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val accentContainer = if (destructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+    val onAccentContainer = if (destructive) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    color = accentContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (destructive) Icons.Rounded.WarningAmber else Icons.Rounded.Info,
+                            null,
+                            tint = onAccentContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth().padding(14.dp)
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text(dismissText)
+                }
+                Button(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    colors = if (destructive) {
+                        ButtonDefaults.buttonColors(containerColor = accent, contentColor = MaterialTheme.colorScheme.onError)
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    }
+                ) {
+                    Text(confirmText)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ConfirmDialog(title: String, message: String, confirm: () -> Unit, dismiss: () -> Unit) {
-    AppDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = confirm) { Text(stringResource(R.string.s127)) } }, dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } })
+private fun ConfirmDialog(
+    title: String,
+    message: String,
+    confirm: () -> Unit,
+    dismiss: () -> Unit,
+    destructive: Boolean = true
+) {
+    ConfirmSheet(
+        title = title,
+        message = message,
+        onConfirm = confirm,
+        onDismiss = dismiss,
+        destructive = destructive
+    )
 }
 
 private fun searchEngineLabel(context: Context, settings: BrowserSettings) = when {
