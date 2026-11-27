@@ -762,104 +762,107 @@ private fun PageErrorView(
         else -> stringResource(R.string.err_page_sub_generic)
     }
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        // 不用 weight 撑满：本列已在 verticalScroll 内，滚动容器给子项的是无限高度约束，
-        // 再用 weight 会触发测量异常。改用固定留白把内容集中在视觉中心偏上。
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(Modifier.height(40.dp))
-            // 双层圆形：外圈淡色底、内圈实底，比单层圆块更有层次，又不至于抢眼
-            Box(contentAlignment = Alignment.Center) {
-                Surface(
-                    modifier = Modifier.size(112.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
-                    shape = CircleShape
-                ) {}
-                Surface(
-                    modifier = Modifier.size(84.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = CircleShape
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            icon,
-                            null,
-                            modifier = Modifier.size(38.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(22.dp))
-            Text(
-                stringResource(R.string.s000),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Spacer(Modifier.height(18.dp))
-            // 网址单独放在一个弱化色块里：长链接不会与标题、按钮的文字混在一起，
-            // 复制地址或核对是否输错都更容易
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = MaterialTheme.shapes.medium
+        // 内容可滚动、按钮固定在底部：整页塞进同一个滚动容器时，小屏上「返回首页」会被推到
+        // 屏幕外，用户只看得到「重新加载」，看起来像错误页没有出口。
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp)) {
+            Column(
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    url,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                )
-            }
-            Spacer(Modifier.height(24.dp))
-            // 排查建议收进一张卡里用分隔线区隔：三条建议各自一张卡时，
-            // 页面会变成一堆同等权重的小方块，反而看不出「这是一组原因说明」
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    reasons.forEachIndexed { index, reason ->
-                        if (index > 0) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 40.dp, end = 12.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
+                Spacer(Modifier.height(20.dp))
+                // 双层圆形：外圈淡色底、内圈实底，比单层圆块更有层次，又不至于抢眼
+                Box(contentAlignment = Alignment.Center) {
+                    Surface(
+                        modifier = Modifier.size(112.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                        shape = CircleShape
+                    ) {}
+                    Surface(
+                        modifier = Modifier.size(84.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = CircleShape
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                Icons.Rounded.Info,
+                                icon,
                                 null,
-                                modifier = Modifier.padding(top = 1.dp).size(16.dp),
+                                modifier = Modifier.size(38.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                reason,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    stringResource(R.string.s000),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                Spacer(Modifier.height(18.dp))
+                // 网址单独放在一个弱化色块里：长链接不会与标题、按钮的文字混在一起，
+                // 复制地址或核对是否输错都更容易
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+                Spacer(Modifier.height(20.dp))
+                // 排查建议收进一张卡里用分隔线区隔：三条建议各自一张卡时，
+                // 页面会变成一堆同等权重的小方块，反而看不出「这是一组原因说明」
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
+                    Column(Modifier.fillMaxWidth()) {
+                        reasons.forEachIndexed { index, reason ->
+                            if (index > 0) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 40.dp, end = 12.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Info,
+                                    null,
+                                    modifier = Modifier.padding(top = 1.dp).size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    reason,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -872,7 +875,6 @@ private fun PageErrorView(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.compliance_back_home))
             }
-            Spacer(Modifier.height(40.dp))
         }
     }
 }

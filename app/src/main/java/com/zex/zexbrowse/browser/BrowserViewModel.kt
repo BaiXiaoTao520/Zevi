@@ -559,7 +559,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 val isDownloadAbort = pendingDownload != null && (uri == null || isSameDownloadTarget(uri, pendingDownload))
                 // 被我们主动拒绕的外部应用导航同样不是失败，否则当前页面会被错误页覆盖
                 val isBlockedExternal = uri != null && isBlockedExternal(id, uri)
-                if (!isDownloadAbort && !isBlockedExternal) scheduleFailure(id, uri, error.code, error.category)
+                if (!isDownloadAbort && !isBlockedExternal) {
+                    // 真正的网络错误：先停掉首屏重试链。
+                    // 那条链每 400ms 重新 loadUri 一次，每次失败都会让 scheduleFailure 重新计时，
+                    // 断网时会把 900ms 的确认延迟不断往后推，最坏要 8 秒以上才弹出错误页，
+                    // 用户看到的就是「页面一直空白，没有报错页」。
+                    clearPending(id)
+                    scheduleFailure(id, uri, error.code, error.category)
+                }
                 return null
             }
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
