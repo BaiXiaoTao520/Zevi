@@ -3774,18 +3774,31 @@ private fun BookmarkDialog(initial: QuickSite? = null, onSubmit: (QuickSite) -> 
     var title by remember(initial) { mutableStateOf(initial?.title ?: "") }
     var url by remember(initial) { mutableStateOf(initial?.url ?: "") }
     val isEdit = initial != null
-    AppDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (isEdit) R.string.s096 else R.string.s099)) },
-        text = {
-            Column {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.s102)) })
-                OutlinedTextField(url, { url = it }, label = { Text(stringResource(R.string.s103)) })
-            }
-        },
-        confirmButton = { TextButton(onClick = { if (title.isNotBlank() && url.isNotBlank()) onSubmit(QuickSite(title, url, title.take(1))) }) { Text(stringResource(if (isEdit) R.string.s104 else R.string.s061)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.s071)) } }
-    )
+    val valid = title.isNotBlank() && url.isNotBlank()
+    FormSheet(
+        title = stringResource(if (isEdit) R.string.s096 else R.string.s099),
+        icon = Icons.Rounded.Bookmarks,
+        subtitle = stringResource(R.string.form_bookmark_hint),
+        confirmText = stringResource(if (isEdit) R.string.s104 else R.string.s061),
+        confirmEnabled = valid,
+        onConfirm = { if (valid) onSubmit(QuickSite(title.trim(), url.trim(), title.trim().take(1))) },
+        onDismiss = onDismiss
+    ) {
+        OutlinedTextField(
+            title,
+            { title = it },
+            label = { Text(stringResource(R.string.s102)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            url,
+            { url = it },
+            label = { Text(stringResource(R.string.s103)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -5396,6 +5409,85 @@ private fun ConfirmDialog(
     )
 }
 
+/**
+ * 表单类底部面板：添加/编辑书签、搜索引擎、浏览器标识共用。
+ *
+ * 与 [AppDialog] 的区别是内容不是一段说明文字，而是一组输入框，所以：
+ * - 顶部给图标 + 标题 + 一行副标题，先说明这块表单在做什么；
+ * - 输入框统一等宽、等间距，不再像以前那样两个框紧贴在一起；
+ * - 按钮用描边 + 实心，禁用态直接体现在确认按钮上，比文字按钮的灰字更明确。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FormSheet(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    subtitle: String? = null,
+    confirmText: String = stringResource(R.string.s061),
+    confirmEnabled: Boolean = true,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (subtitle != null) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.s071))
+                }
+                Button(onClick = onConfirm, enabled = confirmEnabled, modifier = Modifier.weight(1f)) {
+                    Text(confirmText)
+                }
+            }
+        }
+    }
+}
+
 private fun searchEngineLabel(context: Context, settings: BrowserSettings) = when {
     // 百度已下架：旧配置仍为 baidu 时，引擎实际回退到 Google，
     // 这里也跟着显示 Google，避免「设置里写着百度、实际用着 Google」的不一致
@@ -5642,30 +5734,32 @@ private fun CustomSearchEngineDialog(
     val isEdit = initial != null
     // URL 必须含 {query} 占位符，否则搜索词无处可去
     val valid = title.isNotBlank() && url.contains("{query}")
-    AppDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (isEdit) R.string.s324 else R.string.s321)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.s102)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(
-                    url,
-                    { url = it },
-                    label = { Text(stringResource(R.string.s325)) },
-                    supportingText = { Text(stringResource(R.string.s326)) },
-                    isError = url.isNotBlank() && !url.contains("{query}"),
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = valid, onClick = { onSubmit(CustomSearchEngine(title.trim(), url.trim())) }) {
-                Text(stringResource(if (isEdit) R.string.s104 else R.string.s061))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.s071)) } }
-    )
+    FormSheet(
+        title = stringResource(if (isEdit) R.string.s324 else R.string.s321),
+        icon = Icons.Default.Search,
+        subtitle = stringResource(R.string.form_engine_hint),
+        confirmText = stringResource(if (isEdit) R.string.s104 else R.string.s061),
+        confirmEnabled = valid,
+        onConfirm = { if (valid) onSubmit(CustomSearchEngine(title.trim(), url.trim())) },
+        onDismiss = onDismiss
+    ) {
+        OutlinedTextField(
+            title,
+            { title = it },
+            label = { Text(stringResource(R.string.s102)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            url,
+            { url = it },
+            label = { Text(stringResource(R.string.s325)) },
+            supportingText = { Text(stringResource(R.string.s326)) },
+            isError = url.isNotBlank() && !url.contains("{query}"),
+            minLines = 2,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -5938,18 +6032,31 @@ private fun CustomUserAgentDialog(initial: CustomUserAgent? = null, onSubmit: (C
     var title by remember(initial) { mutableStateOf(initial?.title ?: "") }
     var ua by remember(initial) { mutableStateOf(initial?.ua ?: "") }
     val isEdit = initial != null
-    AppDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (isEdit) R.string.s334 else R.string.s335)) },
-        text = {
-            Column {
-                OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.s336)) }, singleLine = true)
-                OutlinedTextField(ua, { ua = it }, label = { Text(stringResource(R.string.s337)) }, minLines = 4)
-            }
-        },
-        confirmButton = { TextButton(onClick = { if (title.isNotBlank() && ua.isNotBlank()) onSubmit(CustomUserAgent(title.trim(), ua.trim())) }) { Text(stringResource(if (isEdit) R.string.s104 else R.string.s061)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.s071)) } }
-    )
+    val valid = title.isNotBlank() && ua.isNotBlank()
+    FormSheet(
+        title = stringResource(if (isEdit) R.string.s334 else R.string.s335),
+        icon = Icons.Default.Computer,
+        subtitle = stringResource(R.string.form_ua_hint),
+        confirmText = stringResource(if (isEdit) R.string.s104 else R.string.s061),
+        confirmEnabled = valid,
+        onConfirm = { if (valid) onSubmit(CustomUserAgent(title.trim(), ua.trim())) },
+        onDismiss = onDismiss
+    ) {
+        OutlinedTextField(
+            title,
+            { title = it },
+            label = { Text(stringResource(R.string.s336)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            ua,
+            { ua = it },
+            label = { Text(stringResource(R.string.s337)) },
+            minLines = 4,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable

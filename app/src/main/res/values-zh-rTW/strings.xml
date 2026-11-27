@@ -809,4 +809,7 @@
     <string name="storage_cleared">快取已清理</string>
     <string name="storage_scanning">正在統計…</string>
 
+    <string name="form_bookmark_hint">儲存後會出現在首頁的捷徑</string>
+    <string name="form_engine_hint">新增後可在搜尋引擎列表中隨時切換</string>
+    <string name="form_ua_hint">自訂標識會隨所有網頁請求一起傳送</string>
 </resources>
