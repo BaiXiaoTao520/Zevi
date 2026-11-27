@@ -68,10 +68,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          # 与正式包用同一套柠枺 / Mirror酱 配置：release 构建会校验柠枺配置，
-          # 缺了直接拒绝构建，测试包也得带上，否则测的就不是完整功能。
-          LEMWOOD_API_BASE: ${{ secrets.LEMWOOD_API_BASE }}
-          LEMWOOD_LAUNCHER_ID: ${{ secrets.LEMWOOD_LAUNCHER_ID }}
+          # 与正式包用同一套 Mirror酱 配置，测试包也走完整更新检查链路。
           MIRRORCHYAN_CDK: ${{ secrets.MIRRORCHYAN_CDK }}
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
         run: ./gradlew assembleRelease --stacktrace
