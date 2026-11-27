@@ -564,7 +564,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     // 那条链每 400ms 重新 loadUri 一次，每次失败都会让 scheduleFailure 重新计时，
                     // 断网时会把 900ms 的确认延迟不断往后推，最坏要 8 秒以上才弹出错误页，
                     // 用户看到的就是「页面一直空白，没有报错页」。
-                    clearPending(id)
+                    // 与 onLoadRequest 一样精确匹配 URL，避免清除另一个待加载地址。
+                    if (uri != null && pendingInitialLoads[id] == uri) clearPending(id)
                     scheduleFailure(id, uri, error.code, error.category)
                 }
                 return null
