@@ -1,0 +1,99 @@
+name: Android Beta 构建
+
+# 测试版通道：合并或推送到 main 后自动构建，产物只上传到 Actions 供下载，
+# 不打标签、不创建 Release、不触发镜像站同步。
+# 正式发版请手动运行 android-release.yml（需把 confirm 填为 release）。
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beta:
+    name: 构建 Beta APK 并上传为 Actions 产物
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: 配置 Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 读取应用版本号
+        id: version
+        run: |
+          VERSION_NAME=$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
+          VERSION_CODE=$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\)/\1/p' app/build.gradle.kts | head -n 1)
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE" || { echo "无法从 app/build.gradle.kts 读取版本号"; exit 1; }
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          # 产物名带上提交短哈希：同一版本连续推几次也能分清是哪个构建
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: 验证 Android SDK
+        run: |
+          test -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" || { echo "未找到 GitHub Runner 预置的 Android SDK 命令行工具"; exit 1; }
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --list >/dev/null
+
+      - name: 安装项目所需 Android SDK 组件
+        run: |
+          set -e
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          (yes | "$SDKMANAGER" --licenses >/dev/null 2>&1) || true
+          "$SDKMANAGER" --channel=3 "platforms;android-37.0" "build-tools;36.0.0"
+
+      - name: 解码 APK 签名密钥
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "缺少 ANDROID_KEYSTORE_BASE64 Secret"; exit 1; }
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+
+      - name: 构建已签名的 Beta APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # 与正式包用同一套柠枺 / Mirror酱 配置：release 构建会校验柠枺配置，
+          # 缺了直接拒绝构建，测试包也得带上，否则测的就不是完整功能。
+          LEMWOOD_API_BASE: ${{ secrets.LEMWOOD_API_BASE }}
+          LEMWOOD_LAUNCHER_ID: ${{ secrets.LEMWOOD_LAUNCHER_ID }}
+          MIRRORCHYAN_CDK: ${{ secrets.MIRRORCHYAN_CDK }}
+          MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: 生成 APK SHA-256 校验文件
+        run: |
+          cd app/build/outputs/apk/release
+          sha256sum app-release.apk > SHA256SUMS.txt
+
+      - name: 重命名产物
+        id: artifact
+        run: |
+          NAME="Zevi-${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}-${{ steps.version.outputs.short }}"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/$NAME.apk"
+          cp app/build/outputs/apk/release/SHA256SUMS.txt "$RUNNER_TEMP/out/$NAME-SHA256SUMS.txt"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: 上传 Beta 产物到 Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ runner.temp }}/out/*
+          retention-days: 30
+          if-no-files-found: error

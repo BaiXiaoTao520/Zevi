@@ -287,8 +287,13 @@ class UpdateChecker(
             val localPart = localParts.getOrElse(index) { 0 }
             if (remotePart != localPart) return remotePart > localPart
         }
-        return false
+        // 数字部分相同：正式版高于同号的测试版（12.5.0 > 12.5.0-beta）。
+        // 否则装 beta 的用户永远收不到同号的正式版更新。
+        return isPrerelease(local) && !isPrerelease(remote)
     }
+
+    /** 是否带预发布后缀（-beta / -rc 等） */
+    private fun isPrerelease(version: String): Boolean = version.contains('-')
 
     /**
      * 把版本号拆成数字段。
