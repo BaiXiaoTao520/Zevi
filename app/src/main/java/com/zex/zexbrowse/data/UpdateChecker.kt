@@ -288,12 +288,29 @@ class UpdateChecker(
             if (remotePart != localPart) return remotePart > localPart
         }
         // 数字部分相同：正式版高于同号的测试版（12.5.0 > 12.5.0-beta）。
-        // 否则装 beta 的用户永远收不到同号的正式版更新。
-        return isPrerelease(local) && !isPrerelease(remote)
+        val remoteLabel = prereleaseLabel(remote)
+        val localLabel = prereleaseLabel(local)
+        if (remoteLabel == null || localLabel == null) {
+            return remoteLabel == null && localLabel != null
+        }
+
+        // 先按标签名称排序（alpha < beta < rc），同名时按末尾数字排序（beta < beta2 < beta10）。
+        val remoteName = remoteLabel.trimEnd { it in '0'..'9' }
+        val localName = localLabel.trimEnd { it in '0'..'9' }
+        val nameOrder = remoteName.compareTo(localName, ignoreCase = true)
+        if (nameOrder != 0) return nameOrder > 0
+
+        val remoteNumber = remoteLabel.substring(remoteName.length).trimStart('0')
+        val localNumber = localLabel.substring(localName.length).trimStart('0')
+        return if (remoteNumber.length != localNumber.length) {
+            remoteNumber.length > localNumber.length
+        } else {
+            remoteNumber > localNumber
+        }
     }
 
-    /** 是否带预发布后缀（-beta / -rc 等） */
-    private fun isPrerelease(version: String): Boolean = version.contains('-')
+    private fun prereleaseLabel(version: String): String? =
+        version.trim().substringBefore('+').substringAfter('-', "").ifEmpty { null }
 
     /**
      * 把版本号拆成数字段。

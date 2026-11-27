@@ -5469,7 +5469,8 @@ private fun FormSheet(
                 }
             }
             Column(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 content = content
             )
