@@ -367,7 +367,7 @@ private val IncognitoBarBackground = Color(0xFF2A1B45)
 private val IncognitoTopBarColor = Color(0xFFEDE6FA)
 
 /** 联系我们的跳转地址 */
-private const val CONTACT_URL = "https://knocket.ai/u/zex"
+private const val CONTACT_URL = "https://page1.visitor-chat.com/direct/44fdcd9819682cb0dea949b0952b39b1_ycy8mnb2ggxc"
 
 /** 书签序列化：每行「标题|网址」，与 DataStore 中的存储格式一致 */
 private fun encodeBookmarks(sites: List<QuickSite>): String =
@@ -1525,6 +1525,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
             previousCrashLog?.let { log ->
                 AppDialog(
                     onDismissRequest = { CrashReporter.clear(context); previousCrashLog = null },
+                    icon = Icons.Rounded.BugReport,
                     title = { Text(stringResource(R.string.crash_dialog_title)) },
                     text = {
                         Column(Modifier.fillMaxWidth()) {
@@ -1542,8 +1543,8 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                             Toast.makeText(context, context.getString(R.string.crash_log_copied), Toast.LENGTH_SHORT).show()
                         }) { Text(stringResource(R.string.s252)) }
                     },
-                    dismissButton = {
-                        TextButton(onClick = { CrashReporter.clear(context); previousCrashLog = null }) { Text(stringResource(R.string.crash_dialog_dismiss)) }
+                    dismissButton = { dismiss ->
+                        TextButton(onClick = dismiss) { Text(stringResource(R.string.crash_dialog_dismiss)) }
                     }
                 )
             }
@@ -1568,6 +1569,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
             if (showFirstRunStorageHint && startupUpdate == null) {
                 AppDialog(
                     onDismissRequest = { showFirstRunStorageHint = false; scope.launch { settingsStore.storageHintShown(true) } },
+                    icon = Icons.Rounded.Folder,
                     title = { Text(stringResource(R.string.s038)) },
                     text = { Text(stringResource(R.string.s039)) },
                         confirmButton = { TextButton(onClick = {
@@ -1575,7 +1577,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                             scope.launch { settingsStore.storageHintShown(true) }
                             externalDirPicker.launch(null)
                         }) { Text(stringResource(R.string.s040)) } },
-                    dismissButton = { TextButton(onClick = { showFirstRunStorageHint = false; scope.launch { settingsStore.storageHintShown(true) } }) { Text(stringResource(R.string.s041)) } }
+                    dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s041)) } }
                 )
             }
             // 首启引导第二弹：外部存储提示处理完（或无需提示）后询问是否设为默认浏览器
@@ -1587,6 +1589,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                 }
                 AppDialog(
                     onDismissRequest = dismissDefaultBrowserPrompt,
+                    icon = Icons.Rounded.Public,
                     title = { Text(stringResource(R.string.s042)) },
                     text = { Text(stringResource(R.string.s043)) },
                     confirmButton = {
@@ -1595,7 +1598,7 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                             requestDefaultBrowser()
                         }) { Text(stringResource(R.string.s044)) }
                     },
-                    dismissButton = { TextButton(onClick = dismissDefaultBrowserPrompt) { Text(stringResource(R.string.s041)) } }
+                    dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s041)) } }
                 )
             }
             // 网页请求麦克风且策略为「每次询问」时：按站点询问并记住选择。
@@ -1617,10 +1620,12 @@ fun ZeviApp(incomingUrl: String? = null, incomingUrlSeq: Long = 0L, onIncomingUr
                 }
                 AppDialog(
                     onDismissRequest = { finishMic(false, false) },
+                    icon = Icons.Rounded.Mic,
                     title = { Text(stringResource(R.string.s045)) },
                     text = { Text(stringResource(R.string.s046, micSite)) },
                     confirmButton = { TextButton(onClick = { finishMic(true, true) }) { Text(stringResource(R.string.s047)) } },
-                    dismissButton = { TextButton(onClick = { finishMic(false, true) }) { Text(stringResource(R.string.s048)) } }
+                    // 拒绝会立刻回调并销毁面板，动画无从播放，保持原样
+                    dismissButton = { _ -> TextButton(onClick = { finishMic(false, true) }) { Text(stringResource(R.string.s048)) } }
                 )
             }
         }
@@ -3253,6 +3258,7 @@ private fun SecurityDetailDialog(
     }
     AppDialog(
         onDismissRequest = onDismiss,
+        icon = Icons.Rounded.Security,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3287,7 +3293,8 @@ private fun RiskySiteDialog(
     val context = LocalContext.current
     AppDialog(
         onDismissRequest = onBack,
-        icon = { Icon(Icons.Rounded.Phishing, null, tint = MaterialTheme.colorScheme.error) },
+        icon = Icons.Rounded.Phishing,
+        destructive = true,
         title = { Text(assessment.reason(context).ifBlank { stringResource(R.string.risk_default_title) }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3300,7 +3307,7 @@ private fun RiskySiteDialog(
         confirmButton = {
             TextButton(onClick = onBack) { Text(stringResource(R.string.s063)) }
         },
-        dismissButton = {
+        dismissButton = { _ ->
             TextButton(onClick = onProceed) { Text(stringResource(R.string.s090)) }
         }
     )
@@ -4146,10 +4153,12 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     if (showNewTabDialog) {
         AppDialog(
             onDismissRequest = { showNewTabDialog = false },
+            icon = Icons.Default.Add,
             title = { Text(stringResource(R.string.s113)) },
             text = { Text(stringResource(R.string.s122)) },
             confirmButton = { TextButton(onClick = { viewModel.newTab(); showNewTabDialog = false; onTabs(false) }) { Text(stringResource(R.string.s123)) } },
-            dismissButton = {
+            // 无痕是第二个动作而不是「取消」，跳转本身会卸载面板，不套收起动画
+            dismissButton = { _ ->
                 TextButton(onClick = {
                     viewModel.newTab(incognito = true)
                     showNewTabDialog = false
@@ -4196,6 +4205,7 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     if (hashResult != null) {
         AppDialog(
             onDismissRequest = { hashResult = null },
+            icon = Icons.Rounded.CheckCircle,
             title = { Text(stringResource(R.string.s126)) },
             text = { Text(hashResult!!) },
             confirmButton = { TextButton(onClick = { hashResult = null }) { Text(stringResource(R.string.s127)) } }
@@ -4206,10 +4216,11 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     if (pendingUri != null) {
         AppDialog(
             onDismissRequest = { pendingExternalAppUri = null; pendingExternalApp = null },
+            icon = Icons.Default.OpenInNew,
             title = { Text(stringResource(R.string.s128)) },
             text = { Text(stringResource(R.string.s129, pendingUri)) },
             confirmButton = { TextButton(onClick = { pendingExternalApp?.invoke(); pendingExternalAppUri = null; pendingExternalApp = null }) { Text(stringResource(R.string.s093)) } },
-            dismissButton = { TextButton(onClick = { pendingExternalAppUri = null; pendingExternalApp = null }) { Text(stringResource(R.string.s071)) } }
+            dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } }
         )
     }
     if (clipboardReadSite != null) {
@@ -4222,10 +4233,11 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
         }
         AppDialog(
             onDismissRequest = { finishClipboard(false, false) },
+            icon = Icons.Rounded.ContentPaste,
             title = { Text(stringResource(R.string.s130)) },
             text = { Text(stringResource(R.string.s131, siteHost(site))) },
             confirmButton = { TextButton(onClick = { finishClipboard(true, true) }) { Text(stringResource(R.string.s047)) } },
-            dismissButton = { TextButton(onClick = { finishClipboard(false, true) }) { Text(stringResource(R.string.s048)) } }
+            dismissButton = { _ -> TextButton(onClick = { finishClipboard(false, true) }) { Text(stringResource(R.string.s048)) } }
         )
     }
 }
@@ -4327,6 +4339,7 @@ private fun TabOverview(viewModel: BrowserViewModel, incognitoOnly: Boolean, onI
     if (showNewTabDialog) {
         AppDialog(
             onDismissRequest = { showNewTabDialog = false },
+            icon = Icons.Default.Add,
             title = { Text(stringResource(R.string.s113)) },
             text = { Text(stringResource(R.string.s122)) },
             confirmButton = {
@@ -4335,7 +4348,7 @@ private fun TabOverview(viewModel: BrowserViewModel, incognitoOnly: Boolean, onI
                     onNewTab(false)
                 }) { Text(stringResource(R.string.s123)) }
             },
-            dismissButton = {
+            dismissButton = { _ ->
                 TextButton(onClick = {
                     showNewTabDialog = false
                     onNewTab(true)
@@ -4412,7 +4425,7 @@ private fun DownloadsScreen(viewModel: BrowserViewModel, onBack: () -> Unit) {
     logItem?.let { item ->
         DownloadLogSheet(item = item, onDismiss = { logItemId = null })
     }
-    if (showDeleteConfirmation) AppDialog(onDismissRequest = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }, title = { Text(stringResource(R.string.s142)) }, text = { Column { Text(stringResource(R.string.s143, deleteTargets.size)) ; CheckRow(stringResource(R.string.s144), deleteFiles) { deleteFiles = it } } }, confirmButton = { TextButton(onClick = { downloads.filter { it.id in deleteTargets }.forEach { viewModel.deleteDownload(it.id, it.targetUri, deleteFiles) }; Toast.makeText(context, context.getString(R.string.s050), Toast.LENGTH_SHORT).show(); selectedIds = emptySet(); deleteTargets = emptySet(); showDeleteConfirmation = false }) { Text(stringResource(R.string.s145)) } }, dismissButton = { TextButton(onClick = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }) { Text(stringResource(R.string.s071)) } })
+    if (showDeleteConfirmation) AppDialog(onDismissRequest = { showDeleteConfirmation = false; selectedIds = emptySet(); deleteTargets = emptySet() }, icon = Icons.Default.Delete, destructive = true, title = { Text(stringResource(R.string.s142)) }, text = { Column { Text(stringResource(R.string.s143, deleteTargets.size)) ; CheckRow(stringResource(R.string.s144), deleteFiles) { deleteFiles = it } } }, confirmButton = { TextButton(onClick = { downloads.filter { it.id in deleteTargets }.forEach { viewModel.deleteDownload(it.id, it.targetUri, deleteFiles) }; Toast.makeText(context, context.getString(R.string.s050), Toast.LENGTH_SHORT).show(); selectedIds = emptySet(); deleteTargets = emptySet(); showDeleteConfirmation = false }) { Text(stringResource(R.string.s145)) } }, dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } })
 }
 
 /**
@@ -5247,15 +5260,27 @@ private fun resolveColorScheme(settings: BrowserSettings, dark: Boolean, context
 @Composable
 private fun AppDialog(
     onDismissRequest: () -> Unit,
-    confirmButton: @Composable () -> Unit = {},
-    dismissButton: (@Composable () -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.Info,
+    destructive: Boolean = false,
     title: (@Composable () -> Unit)? = null,
-    text: (@Composable () -> Unit)? = null
+    text: (@Composable () -> Unit)? = null,
+    confirmButton: @Composable () -> Unit = {},
+    dismissButton: (@Composable (dismiss: () -> Unit) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // 先播完收起动画再回调：直接把 onDismissRequest 交给按钮，面板会被立刻从组合中摘下，
+    // 用户看到的就是「点一下直接消失」，没有任何过渡。
+    val dismiss: () -> Unit = {
+        scope.launch {
+            runCatching { sheetState.hide() }
+            onDismissRequest()
+        }
+    }
+    val iconContainer = if (destructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+    val iconTint = if (destructive) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
     ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -5265,17 +5290,30 @@ private fun AppDialog(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (icon != null) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { icon() }
-            }
-            if (title != null) {
-                CompositionLocalProvider(
-                    LocalTextStyle provides MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            // 标题行：图标 + 标题。图标不再由调用方传裸 Icon，统一成色块里的矢量图，
+            // 一眼能区分「这是提示」「这是警告」「这是删除」
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    color = iconContainer,
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Box(Modifier.fillMaxWidth()) { title() }
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = iconTint, modifier = Modifier.size(22.dp))
+                    }
+                }
+                if (title != null) {
+                    Spacer(Modifier.width(14.dp))
+                    CompositionLocalProvider(
+                        LocalTextStyle provides MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    ) {
+                        Box(Modifier.weight(1f)) { title() }
+                    }
                 }
             }
             if (text != null) {
+                // 内容区自适应：内容少时按内容高度收，内容多时封顶 320dp 内部滚动，
+                // 不会把下面的按钮挤出屏幕
                 Surface(
                     modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
                     shape = MaterialTheme.shapes.large,
@@ -5298,7 +5336,7 @@ private fun AppDialog(
             ) {
                 if (dismissButton != null) {
                     // 居中而不是贴左：文字按钮本身宽度有限，放在半宽盒子的左端会显得偏
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { dismissButton() }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { dismissButton(dismiss) }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { confirmButton() }
                 } else {
                     // 只有一个动作时铺满整行，不留半格空白
@@ -5328,11 +5366,19 @@ private fun ConfirmSheet(
     destructive: Boolean = true
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // 先播完收起动画再回调，否则面板会瞬间消失
+    val dismiss: () -> Unit = {
+        scope.launch {
+            runCatching { sheetState.hide() }
+            onDismiss()
+        }
+    }
     val accent = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     val accentContainer = if (destructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
     val onAccentContainer = if (destructive) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -5379,7 +5425,7 @@ private fun ConfirmSheet(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = dismiss, modifier = Modifier.weight(1f)) {
                     Text(dismissText)
                 }
                 Button(
@@ -5436,8 +5482,16 @@ private fun FormSheet(
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // 先播完收起动画再回调，否则面板会瞬间消失
+    val dismiss: () -> Unit = {
+        scope.launch {
+            runCatching { sheetState.hide() }
+            onDismiss()
+        }
+    }
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -5484,7 +5538,7 @@ private fun FormSheet(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = dismiss, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.s071))
                 }
                 Button(onClick = onConfirm, enabled = confirmEnabled, modifier = Modifier.weight(1f)) {
@@ -6225,6 +6279,7 @@ private fun CookieSettingsScreen(
     if (showExitOptions) {
         AppDialog(
             onDismissRequest = { showExitOptions = false },
+            icon = Icons.Rounded.Cookie,
             title = { Text(stringResource(R.string.s232)) },
             text = {
                 Column {
@@ -6239,7 +6294,7 @@ private fun CookieSettingsScreen(
                     showExitOptions = false
                 }) { Text(stringResource(R.string.s127)) }
             },
-            dismissButton = { TextButton(onClick = { showExitOptions = false }) { Text(stringResource(R.string.s071)) } }
+            dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } }
         )
     }
 }
@@ -7479,6 +7534,7 @@ private fun DebugScreen(
     if (showCrashLog && crashLog != null) {
         AppDialog(
             onDismissRequest = { showCrashLog = false },
+            icon = Icons.Rounded.BugReport,
             title = { Text(stringResource(R.string.debug_crash_title)) },
             text = {
                 Text(
@@ -7902,6 +7958,7 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
     }
     AppDialog(
         onDismissRequest = onDismiss,
+        icon = Icons.Default.Download,
         title = { Text(stringResource(R.string.s393)) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
@@ -7936,7 +7993,7 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
                 Icon(Icons.Default.Download, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.s069))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.s071)) } }
+        dismissButton = { dismiss -> TextButton(onClick = dismiss) { Text(stringResource(R.string.s071)) } }
     )
 }
 
@@ -8217,6 +8274,7 @@ private fun AboutScreen(
     message?.let { content ->
         AppDialog(
             onDismissRequest = { message = null },
+            icon = Icons.Rounded.Info,
             title = { Text(stringResource(R.string.s287)) },
             text = { Text(content) },
             confirmButton = { TextButton(onClick = { message = null }) { Text(stringResource(R.string.s127)) } }
