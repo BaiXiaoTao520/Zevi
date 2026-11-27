@@ -94,9 +94,6 @@ class BrowserDownloadWorker(appContext: Context, params: WorkerParameters) : Cor
         val fileName = inputData.getString(KEY_FILE_NAME).orEmpty()
         val displayName = fileName
         val expectedHash = inputData.getString(KEY_EXPECTED_HASH).orEmpty()
-        // 本地捕获文件：onExternalResponse 时 Gecko 已把响应体拉下来存到临时文件。
-        // 存在且可用时直接读它落盘，全程不再发第二次 HTTP 请求（一次性令牌二次请求会 403）。
-        val localBin = inputData.getString(KEY_LOCAL_SOURCE)?.let(::File)?.takeIf { it.exists() }
         // 先用 NotificationManager 直接发出「准备中」通知：
         // setForeground 走 WorkManager 的前台服务启动流程（Android 12+ 异步），
         // 紧接着的阻塞网络请求会让通知迟迟不出现，用户以为没反应。
@@ -119,58 +116,31 @@ class BrowserDownloadWorker(appContext: Context, params: WorkerParameters) : Cor
             // 否则（返回 200）必须从头写，否则会拼出损坏文件。
             var startOffset = record.downloadedBytes.coerceAtLeast(0L)
             val ifRange = record.etag
-            if (localBin != null) {
-                // 等待 capture 完成（done/fail 标记）；capture 是异步的，可能在 Worker 启动时还没读完。
-                // fail 一出现就直接跳出，不再把剩下的超时时间白等完（否则界面会停在「正在下载」不动）。
-                val base = localBin.name.removeSuffix(".bin")
-                val doneFile = File(localBin.parentFile, "$base.done")
-                val failFile = File(localBin.parentFile, "$base.fail")
-                val deadline = System.currentTimeMillis() + LOCAL_WAIT_TIMEOUT_MS
-                while (System.currentTimeMillis() < deadline && !doneFile.exists() && !failFile.exists()) {
-                    if (isStopped) throw PauseOrCancel()
-                    Thread.sleep(150)
-                }
-                if (doneFile.exists()) {
-                    input = localBin.inputStream()
-                    total = localBin.length()
-                    totalBytes = total
-                    // 本地捕获文件是完整文件，不能与历史偏移叠加
-                    startOffset = 0L
-                } else if (failFile.exists()) {
-                    // 捕获失败（例如拿到的是验证页而不是文件）：立即回退网络下载，不再等超时。
-                    // 不打印 url：下载地址常带一次性令牌，logcat 对其它应用可读。
-                    android.util.Log.d("ZexDownload", "capture failed, fallback to network")
-                }
+            val requestBuilder = Request.Builder().url(url).header("User-Agent", DOWNLOAD_USER_AGENT)
+            if (startOffset > 0L) {
+                requestBuilder.header("Range", "bytes=$startOffset-")
+                if (ifRange.isNotBlank()) requestBuilder.header("If-Range", ifRange)
             }
-
-            // 无本地捕获文件（普通下载页面直接给 URL、或 capture 失败/超时）：回退到网络下载
-            if (input == null) {
-                val requestBuilder = Request.Builder().url(url).header("User-Agent", DOWNLOAD_USER_AGENT)
-                if (startOffset > 0L) {
-                    requestBuilder.header("Range", "bytes=$startOffset-")
-                    if (ifRange.isNotBlank()) requestBuilder.header("If-Range", ifRange)
-                }
-                val c = client.newCall(requestBuilder.build())
-                call = c
-                cancellationHandle = kotlin.coroutines.coroutineContext.job.invokeOnCompletion {
-                    if (it is CancellationException) c.cancel()
-                }
-                val response = c.execute()
-                if (!response.isSuccessful) { response.close(); error(applicationContext.getString(R.string.dl_err_http, response.code)) }
-                val body = response.body ?: run { response.close(); error(applicationContext.getString(R.string.dl_err_empty_body)) }
-                httpResponse = response
-                input = body.byteStream()
-                // 206 = 服务端同意从 startOffset 继续；200 = 只能从头给，必须舍弃历史偏移
-                val partial = response.code == 206
-                if (!partial) startOffset = 0L
-                val length = body.contentLength()
-                total = if (length > 0) length + startOffset else -1L
-                totalBytes = total
-                // 存下 ETag，下次续传时用 If-Range 校验，避免服务器换了文件还硬拼
-                val etag = response.header("ETag").orEmpty()
-                if (etag.isNotBlank() && etag != record.etag) {
-                    database.downloadDao().updateEtag(id, etag)
-                }
+            val c = client.newCall(requestBuilder.build())
+            call = c
+            cancellationHandle = kotlin.coroutines.coroutineContext.job.invokeOnCompletion {
+                if (it is CancellationException) c.cancel()
+            }
+            val response = c.execute()
+            if (!response.isSuccessful) { response.close(); error(applicationContext.getString(R.string.dl_err_http, response.code)) }
+            val body = response.body ?: run { response.close(); error(applicationContext.getString(R.string.dl_err_empty_body)) }
+            httpResponse = response
+            input = body.byteStream()
+            // 206 = 服务端同意从 startOffset 继续；200 = 只能从头给，必须舍弃历史偏移
+            val partial = response.code == 206
+            if (!partial) startOffset = 0L
+            val length = body.contentLength()
+            total = if (length > 0) length + startOffset else -1L
+            totalBytes = total
+            // 存下 ETag，下次续传时用 If-Range 校验，避免服务器换了文件还硬拼
+            val etag = response.header("ETag").orEmpty()
+            if (etag.isNotBlank() && etag != record.etag) {
+                database.downloadDao().updateEtag(id, etag)
             }
 
             var downloaded = startOffset
@@ -282,13 +252,6 @@ class BrowserDownloadWorker(appContext: Context, params: WorkerParameters) : Cor
             runCatching { input?.close() }
             runCatching { httpResponse?.close() }
             runCatching { cancellationHandle?.dispose() }
-            // 清掉本地临时捕获文件（无论成功失败都不再需要）
-            if (localBin != null) {
-                val base = localBin.name.removeSuffix(".bin")
-                runCatching { localBin.delete() }
-                runCatching { File(localBin.parentFile, "$base.done").delete() }
-                runCatching { File(localBin.parentFile, "$base.fail").delete() }
-            }
         }
     }
 
@@ -453,9 +416,7 @@ class BrowserDownloadWorker(appContext: Context, params: WorkerParameters) : Cor
         const val KEY_EXPECTED_HASH = "expected_hash"
         const val KEY_PROGRESS = "progress"
         // 本地已捕获的响应体临时文件路径（onExternalResponse 当场读下来的那份数据）
-        const val KEY_LOCAL_SOURCE = "local_source"
         // 等待捕获完成的超时：capture 为异步，可能晚于 Worker 启动；超时则回退网络下载
-        private const val LOCAL_WAIT_TIMEOUT_MS = 120_000L
         private const val CHANNEL_ID = "browser_downloads"
         private const val FINISHED_CHANNEL_ID = "browser_downloads_done"
     }

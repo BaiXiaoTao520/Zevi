@@ -21,7 +21,6 @@ import com.zex.zexbrowse.data.HistoryEntity
 import com.zex.zexbrowse.download.DownloadFileName
 import com.zex.zexbrowse.download.DownloadScheduler
 import com.zex.zexbrowse.data.BrowserSettings
-import com.zex.zexbrowse.data.LemwoodMirror
 import com.zex.zexbrowse.data.FakeSites
 import com.zex.zexbrowse.data.MainlandSearchEngines
 import com.zex.zexbrowse.data.SecurityScanner
@@ -43,10 +42,8 @@ import org.mozilla.geckoview.WebRequestError
 import org.mozilla.geckoview.WebResponse
 import org.mozilla.geckoview.StorageController
 import java.net.URLEncoder
-import java.io.File
 import java.io.InputStream
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -59,7 +56,6 @@ internal fun <T> selectedOrSingleReusableTab(tabs: List<T>, selected: T?, isReus
 
 data class BrowserTab(val id: String = UUID.randomUUID().toString(), val session: GeckoSession, val incognito: Boolean, val title: String = "", val url: String = "", val progress: Int = 0, val loading: Boolean = false, val failed: Boolean = false, val failedUrl: String = "", val errorCode: Int = 0, val errorCategory: Int = 0, val preview: Bitmap? = null, val canGoBack: Boolean = false, val canGoForward: Boolean = false, val risk: SecurityScanner.RiskAssessment = SecurityScanner.RiskAssessment(), /** 命中受限的大陆搜索引擎时记录主域名，非空则展示二次确认页 */ val restrictedEngine: String? = null, val beforeRestrictedUrl: String = "", /** 命中假冒站点时记录主机名，非空则展示禁止访问页（不给继续访问） */ val fakeSite: String? = null)
 // 下载响应体临时捕获结果：bin 为数据文件，done/fail 为完成标记
-class CapturedBody(val bin: File, val done: File, val fail: File)
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     private val runtime = (application as ZeviApplication).runtime
     private fun forceDarkApplication() = getApplication<Application>() as ZeviApplication
@@ -99,35 +95,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private fun notifyExternalDownload(url: String) {
         val handler = externalDownloadHandler
         if (handler != null) handler(url) else bufferedExternalDownloads.addLast(url)
-    }
-    /**
-     * 将 onExternalResponse 交下来的响应体读完存到临时文件。
-     *
-     * body 流有读超时（默认 30 秒），且不能跨回调长时间留着，所以必须立刻在后台读完。
-     * 读完写 done 标记，读失败写 fail 标记；Worker 据此选择「本地文件落盘」还是「回退网络」。
-     */
-    private fun captureDownloadBody(url: String, response: WebResponse) {
-        val body = response.body ?: return
-        val dir = File(getApplication<Application>().cacheDir, "download-capture")
-        val id = UUID.randomUUID().toString()
-        val bin = File(dir, "$id.bin")
-        val done = File(dir, "$id.done")
-        val fail = File(dir, "$id.fail")
-        // 先同步登记文件句柄，确保紧接着的 enqueueDownload 能取到（不依赖后台是否已执行）
-        capturedBodies[url] = CapturedBody(bin, done, fail)
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                dir.mkdirs()
-                // 顺手清掉一天前的残留（用户取消下载时可能留下临时文件）
-                val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
-                dir.listFiles()?.forEach { if (it.lastModified() < cutoff) runCatching { it.delete() } }
-                body.use { input -> bin.outputStream().use { out -> input.copyTo(out, DEFAULT_BUFFER_SIZE) } }
-                done.writeText(bin.length().toString())
-            } catch (t: Throwable) {
-                runCatching { bin.delete() }
-                runCatching { fail.writeText(t.message ?: "capture failed") }
-            }
-        }
     }
     // 界面层注入：网页请求选择文件（<input type="file"> 等）时回调。
     // 参数：mimeTypes（可为空）、是否允许多选、结果回调（用户选中的文件 URI，取消为 null）。
@@ -182,11 +149,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     //   仍会重新提醒——这是安全隐患，不能因为一次点击就长期免提醒。
     private val confirmedSearchHosts = HashMap<String, MutableSet<String>>()
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    // 下载响应体捕获：Gecko 在 onExternalResponse 时已把响应体拉了下来，body 流只在回调期间有效，
-    // 必须当场读走存成临时文件。之后下载直接从本地文件落盘，不再用 URL 第二次请求，
-    // 从根本上避开柠枺等站点「一次性令牌二次请求 → 403」的问题。
-    // key = 下载地址
-    private val capturedBodies = ConcurrentHashMap<String, CapturedBody>()
     val selected get() = _tabs.value.firstOrNull { it.id == _selectedId.value }
 
     /**
@@ -475,18 +437,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
                 // 收到下载信号：立即取消可能已排队的「加载失败」，避免下载时误弹错误页
                 cancelPendingFailure(id)
-                // 柠泽站点的 PoW 验证页是 HTML，Gecko 也会当它是一次外部响应。
-                // 若照单全收，用户会看到一个名为 verify 的「下载」，点下去又因没有真正的文件而卡住。
-                // 验证页应当留在网页内继续跑验证，不能弹下载框。
+                // 网页本身也可能被当成外部响应（带 Content-Disposition 的 HTML），
+                // 照单全收会出现一个点下去没有文件的「下载」，必须先判掉。
                 if (!isRealFileDownload(response)) {
                     android.util.Log.d("ZexIntent", "ignoreNonFileResponse uri=${response.uri} type=${response.headers["Content-Type"]}")
                     return
                 }
                 pendingDownloads[id] = response.uri
                 clearPending(id)
-                // 仅对柠枺镜像下载就地捕获响应体（它的一次性令牌二次请求必 403）。
-                // 普通站点下载保持原有「弹框 → 按 URL 下载」流程不变，避免大文件在确认前占双份磁盘。
-                if (isLemwoodUrl(response.uri)) captureDownloadBody(response.uri, response)
                 notifyExternalDownload(response.uri)
             }
         })
@@ -1039,16 +997,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
      */
     fun enqueueDownload(url: String, fileName: String, expectedHash: String, onEnqueued: (String) -> Unit = {}) {
         selected?.let { tab -> if (pendingDownloads[tab.id] == url) pendingDownloads.remove(tab.id) }
-        // 若 onExternalResponse 已把响应体捕获到临时文件，取下它的路径传给 Worker，
-        // Worker 直接读本地文件落盘，不再用 URL 请求（一次性令牌二次请求会 403）。
-        val captured = capturedBodies.remove(url)
         viewModelScope.launch {
             val id = runCatching {
                 downloadScheduler.enqueue(
                     url, fileName, expectedHash,
                     browserSettings.downloadDirectoryMode == "external",
-                    browserSettings.externalDownloadTreeUri,
-                    captured?.bin?.absolutePath
+                    browserSettings.externalDownloadTreeUri
                 )
             }.getOrNull()
             if (id != null) onEnqueued(id)
@@ -1081,7 +1035,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
      * 走「删旧建新」而不是续传：取消时文件已被删、失败时内容不完整，
      * 拼起来比重新下一遍风险还高。旧记录在新任务成功入队后才清，
      * 所以列表里不会出现两条同名条目，也不会因为入队失败而连记录都没了。
-     * 不能复用 capturedBodies：那是一次性令牌的本地副本，当时已经消费过了。
+     * 不复用旧文件：取消时文件已被删、失败时内容不完整。
      */
     fun retryDownload(id: String) {
         viewModelScope.launch {
@@ -1097,48 +1051,35 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
-    /** 该地址是否已有本地捕获的响应体（用于下载弹框跳过可能二次消费令牌的网络名字探测） */
-    fun hasCapturedBody(url: String): Boolean = capturedBodies.containsKey(url)
-    /** 判断 URL 是否属于柠枺镜像站（仅它的下载需要就地捕获响应体） */
-    private fun isLemwoodUrl(url: String): Boolean {
-        if (!LemwoodMirror.isAvailable) return false
-        val site = LemwoodMirror.siteUrl()
-        return site.isNotBlank() && url.startsWith(site)
-    }
-
     /**
      * 判断这次外部响应是不是真的文件下载。
      *
-     * Gecko 把「服务器要求存盘」的响应交给 onExternalResponse，但柠泽的 PoW 验证页
-     * 也会走到这里，而且验证页的响应往往**也带 Content-Disposition**，
-     * 之前只看「有没有文件名」就放行，于是出现一个名为 verify、大小对不上的假下载。
+     * Gecko 把「服务器要求存盘」的响应交给 onExternalResponse，但网页本身也可能走到这里，
+     * 而且这类响应往往**也带 Content-Disposition**，只看「有没有文件名」就放行，
+     * 会出现点下去没有文件的假下载。
      *
      * 因此改为按下面顺序判定：
      * 1. MIME 是网页 → 不是文件（即使带了 filename 也不弹下载框）；
-     * 2. 文件名是 verify / 无扩展名等无意义名字 → 不是真文件；
-     * 3. 有合法扩展名或落在柠泽 /download/ 直链上 → 真文件；
-     * 4. 其余保持原有行为（当作下载）。
+     * 2. 文件名没有扩展名、或扩展名本身就是网页类型 → 不是真文件；
+     * 3. 其余保持原有行为（当作下载）。
      */
     private fun isRealFileDownload(response: WebResponse): Boolean {
         val contentType = response.headers["Content-Type"].orEmpty().lowercase()
-        // 验证页是 HTML：优先判掉，不能因为带了 filename 就当成下载
+        // 网页优先判掉，不能因为带了 filename 就当成下载
         if (contentType.startsWith("text/html") || contentType.startsWith("application/xhtml")) {
             return false
         }
         val disposition = response.headers["Content-Disposition"].orEmpty()
         val fileName = DownloadFileName.fromContentDisposition(disposition)
         if (fileName != null) {
-            // 文件名本身必须像个真实文件（带扩展名、不是 verify 之类）
+            // 文件名本身必须像个真实文件（带扩展名，且扩展名不是网页类型）
             val lower = fileName.lowercase()
             val looksReal = lower.contains('.') &&
-                !lower.startsWith("verify") &&
                 lower.substringAfterLast('.') !in setOf("html", "htm", "php", "aspx", "jsp")
             if (looksReal) return true
-            // 带的是 verify.html 这类：明显是验证页，不能下载
+            // 带的是 .html 这类：明显是网页，不能当下载
             return false
         }
-        // 柠泽下载直链：即使没带 Content-Disposition 也应当是真文件
-        if (isLemwoodUrl(response.uri) && response.uri.contains("/download/")) return true
         // 其余保持原有行为（当作下载），不影响普通站点
         return true
     }
