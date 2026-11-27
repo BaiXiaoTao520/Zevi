@@ -20,8 +20,8 @@ data class ReleaseInfo(
     val version: String,
     val notes: String,
     val downloadUrl: String,
-    /** 镜像站已同步该版本，可在浏览器中走高速通道下载 */
-    val lemwoodAvailable: Boolean = false
+    /** 枫源镜像已同步该版本时的验证页路径；为空表示当前版本在该站不可用 */
+    val fyhubPath: String = ""
 )
 
 data class Contributor(val name: String, val avatarUrl: String, val contributions: Int)
@@ -63,12 +63,15 @@ class UpdateChecker(
         val github = githubLatest()
         val githubOk = github != null
 
-        val lemwoodVersion = LemwoodMirror.latestVersion(client)
-        val lemwood = lemwoodVersion?.takeIf { isNewer(it) }?.let { lemwoodRelease(it) }
+        // 枫源镜像：只查资产列表，不需要验证；取其中比本机新的最高版本
+        val fyhubAssets = FyHubMirror.assets(client)
+        val fyhub = fyhubAssets
+            .filter { isNewer(it.version) }
+            .maxWithOrNull { a, b -> if (isNewer(a.version, b.version)) 1 else -1 }
 
-        val anySourceOk = mirrorOk || githubOk || lemwoodVersion != null
+        val anySourceOk = mirrorOk || githubOk || fyhubAssets.isNotEmpty()
 
-        return CheckOutcome(release = aggregate(remote, mirrorVersion, github, lemwood), anySourceOk = anySourceOk)
+        return CheckOutcome(release = aggregate(remote, mirrorVersion, github, fyhub), anySourceOk = anySourceOk)
     }
 
     /**
@@ -77,10 +80,9 @@ class UpdateChecker(
      * 三个来源同时参与，各自贡献自己擅长的部分：
      * - Mirror酱：国内连通性最好，负责确认版本号与更新日志；
      * - GitHub：唯一能拿到 assets 直链的源，应用内下载依赖它；
-     * - 柠枺镜像站：已同步该版本时标记可走浏览器高速通道。
+     * - 枫源镜像：已同步该版本时标记可走站点验证页下载。
      *
-     * 三者并存而非短路：任一渠道出问题时另外两个还能用，
-     * 弹窗里也会同时展示可用的下载入口，由用户自己选。
+     * 三者并存而非短路：任一渠道出问题时其余仍可用。
      */
     suspend fun latest(): ReleaseInfo? = check().release
 
@@ -93,15 +95,15 @@ class UpdateChecker(
         remote: MirrorChyan.Result,
         mirrorVersion: String?,
         github: ReleaseInfo?,
-        lemwood: ReleaseInfo?
+        fyhub: FyHubAsset?
     ): ReleaseInfo? {
-        // 三方取最高版本，避免任何单一来源滞后掩盖真实的新版本。
+        // 多方取最高版本，避免任何单一来源滞后掩盖真实的新版本。
         // 不能用拼接数字的方式比大小（段数不同的版本会得出错误结果），
         // 直接复用 isNewer 的逐段比较。
         val candidates = listOfNotNull(
             mirrorVersion?.let { ReleaseInfo(it, remote.releaseNote, "") },
             github,
-            lemwood
+            fyhub?.let { ReleaseInfo(it.version, "", "") }
         ).filter { isNewer(it.version) }
 
         if (candidates.isEmpty()) return null
@@ -119,28 +121,11 @@ class UpdateChecker(
         return best.copy(
             notes = notes,
             // 应用内下载只用 GitHub assets 直链：它是永久地址。
-            // Mirror酱 的高速下载必须经网页完成，柠枺 的直链还要过 PoW 验证，
-            // 两者都不能当作应用内下载地址。
+            // Mirror酱 与枫源都要求经网页完成验证，不能当作应用内下载地址。
             // 因此拿不到 GitHub 直链时留空，弹窗会把「下载」置灰，引导用户走浏览器通道。
             downloadUrl = github?.downloadUrl.orEmpty(),
-            // 柠枺只要同步了该版本就标记，与最终选哪个来源无关
-            lemwoodAvailable = lemwood != null
-        )
-    }
-
-    /**
-     * 按已知版本号构造镜像站结果。
-     *
-     * 下载必须经浏览器完成站点的 PoW 验证，因此这里只标记该版本可走高速通道，
-     * 实际地址由界面拼成直链后交给浏览器打开。
-     */
-    private fun lemwoodRelease(version: String): ReleaseInfo {
-        return ReleaseInfo(
-            version = version,
-            // 镜像站不提供更新说明，留空时界面显示「暂无更新说明」
-            notes = "",
-            downloadUrl = "",
-            lemwoodAvailable = true
+            // 枫源已同步同一个版本号时给出验证页路径，版本对不上就不展示该入口
+            fyhubPath = fyhub?.takeIf { it.version == best.version }?.downloadPath.orEmpty()
         )
     }
 

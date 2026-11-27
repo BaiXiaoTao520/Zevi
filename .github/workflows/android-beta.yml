@@ -1,12 +1,12 @@
 name: Android Beta 构建
 
-# 测试版通道：合并或推送到 main 后自动构建，产物只上传到 Actions 供下载，
+# 测试版通道：非 main 分支的推送自动构建，产物只上传到 Actions 供下载，
 # 不打标签、不创建 Release、不触发镜像站同步。
-# 正式发版请手动运行 android-release.yml（需把 confirm 填为 release）。
+# 推送到 main 由 android-release.yml 直接发布正式版。
 
 on:
   push:
-    branches: ["main"]
+    branches-ignore: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -68,10 +68,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          # 与正式包用同一套柠枺 / Mirror酱 配置：release 构建会校验柠枺配置，
-          # 缺了直接拒绝构建，测试包也得带上，否则测的就不是完整功能。
-          LEMWOOD_API_BASE: ${{ secrets.LEMWOOD_API_BASE }}
-          LEMWOOD_LAUNCHER_ID: ${{ secrets.LEMWOOD_LAUNCHER_ID }}
+          # 与正式包用同一套 Mirror酱 配置，测试包也走完整更新检查链路。
           MIRRORCHYAN_CDK: ${{ secrets.MIRRORCHYAN_CDK }}
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
         run: ./gradlew assembleRelease --stacktrace

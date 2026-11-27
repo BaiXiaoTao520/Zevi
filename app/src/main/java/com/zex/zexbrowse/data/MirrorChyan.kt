@@ -32,7 +32,7 @@ object MirrorChyan {
      * 资源标识符（rid），由 Mirror酱 侧分配。
      *
      * 与 CDK 一样通过构建期注入，不写死在源码里：
-     * 公开仓库不应暴露接入点，这也是本项目接入柠枺时的既有约定。
+     * 公开仓库不应暴露接入点。
      * 未注入时 [isAvailable] 为 false，界面上不展示相关入口。
      */
     private val resId: String get() = BuildConfig.MIRRORCHYAN_RID.trim()

@@ -36,7 +36,7 @@ class DownloadScheduler(private val context: Context) {
      * Room 写入与 WorkManager 入队，放在调用方（如界面层的 Main 协程）执行
      * 会卡住主线程，表现为“点下载后界面顿一下”。
      */
-    suspend fun enqueue(url: String, fileName: String, expectedHash: String, useExternalDirectory: Boolean, externalTreeUri: String, localSourceBin: String? = null): String = withContext(Dispatchers.IO) {
+    suspend fun enqueue(url: String, fileName: String, expectedHash: String, useExternalDirectory: Boolean, externalTreeUri: String): String = withContext(Dispatchers.IO) {
         // The caller supplies the name approved by the user. Do not resolve it again here.
         val finalName = fileName
         val id = UUID.randomUUID().toString()
@@ -58,7 +58,6 @@ class DownloadScheduler(private val context: Context) {
                 .putString(BrowserDownloadWorker.KEY_URI, target.toString())
                 .putString(BrowserDownloadWorker.KEY_FILE_NAME, targetName)
                 .putString(BrowserDownloadWorker.KEY_EXPECTED_HASH, expectedHash.trim())
-                .putString(BrowserDownloadWorker.KEY_LOCAL_SOURCE, localSourceBin)
                 .build()
             workManager.enqueue(OneTimeWorkRequestBuilder<BrowserDownloadWorker>().setInputData(input).addTag(id).build()).result.get()
         } catch (failure: Exception) {
@@ -135,7 +134,6 @@ class DownloadScheduler(private val context: Context) {
      * 拼起来比从头下风险还高。
      * 顺序上是「先入队新任务，成功后才删旧记录与旧文件」：
      * 反过来的话入队一报错，用户就同时失去记录和文件，连再点一次都不行。
-     * 不能复用 capturedBodies：那是一次性令牌的本地副本，当时已经消费过了。
      */
     suspend fun retry(id: String, useExternalDirectory: Boolean, externalTreeUri: String): Boolean = withContext(Dispatchers.IO) {
         retryMutex.withLock {

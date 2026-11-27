@@ -137,6 +137,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.CloudOff
@@ -254,8 +255,8 @@ import com.zex.zexbrowse.data.CustomSearchEngine
 import com.zex.zexbrowse.data.decodeCustomSearchEngines
 import com.zex.zexbrowse.data.DownloadEntity
 import com.zex.zexbrowse.data.encodeCustomSearchEngines
-import com.zex.zexbrowse.data.LemwoodMirror
 import com.zex.zexbrowse.data.MirrorChyan
+import com.zex.zexbrowse.data.FyHubMirror
 import com.zex.zexbrowse.data.NetworkDiagnostics
 import com.zex.zexbrowse.data.NetworkProbe
 import com.zex.zexbrowse.data.RecommendCategory
@@ -2529,24 +2530,18 @@ private fun RecommendCategoryScreen(
  * 3. 设备上只有一个浏览器时，直接用那个（不存在选择余地）。
  */
 /**
- * 打开柠枺镜像下载链接。
+ * 用本应用自己的浏览器打开链接。
  *
- * 优先在本应用自己的浏览器内打开：GeckoView 是 Firefox 内核，HTTPS 下
- * `isSecureContext` 与 `crypto.subtle` 可用，站点的 PoW 验证页能在页面里正常完成。
- * 验证通过后页面跳转到带令牌的下载地址，Gecko 触发 onExternalResponse，
- * 此时 body 流被当场读走存成临时文件，Worker 直接用这份本地数据落盘，
- * **全程只请求一次**，不会因为二次请求消耗令牌而 403。
+ * 用于枫源镜像的下载验证页：站点要求页面内完成 PoW 验证，而 GeckoView 是 Firefox 内核，
+ * HTTPS 下 `isSecureContext` 与 `crypto.subtle` 都可用，验证能在应用内正常跑完。
  *
- * 回退：若无法交给本应用自己（极少见），再交给外部浏览器。
+ * 不能复用 [openInBrowser]——那个函数刻意避开自身（那是为「跳浏览器」场景设计的）。
  */
-private fun openMirrorDownload(context: Context, url: String) {
-    // 交给本应用自己：显式 setPackage 自身，经 MainActivity.onNewIntent 进入本应用浏览器标签。
-    // 不能用 openInBrowser——那个函数刻意避开自身（那是为“跳浏览器”场景设计的）。
-    val self = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+private fun openSelfBrowser(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         .setPackage(context.packageName)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    if (runCatching { context.startActivity(self) }.isSuccess) return
-    // 回退：本应用无法拉起时，交给外部浏览器
+    if (runCatching { context.startActivity(intent) }.isSuccess) return
     openInBrowser(context, url)
 }
 
@@ -4192,7 +4187,6 @@ private fun BrowserScreen(viewModel: BrowserViewModel, settings: BrowserSettings
     if (downloadUrl != null) {
         DownloadDialog(
             url = downloadUrl!!,
-            skipResolve = viewModel.hasCapturedBody(downloadUrl!!),
             onDownload = { fileName, expected ->
                 expectedHash = expected
                 selectedFileName = fileName
@@ -6343,15 +6337,9 @@ private fun readStorageStats(context: android.content.Context): StorageStats {
     )
 }
 
-/**
- * 清理缓存目录。
- *
- * 跳过 download-capture：那是正在进行的下载用来暂存响应体的目录，
- * 删掉会让后台任务写到一半的文件消失。
- */
+/** 清理缓存目录 */
 private fun clearAppCache(context: android.content.Context) {
     context.cacheDir.listFiles()?.forEach { file ->
-        if (file.name == "download-capture") return@forEach
         runCatching { file.deleteRecursively() }
     }
 }
@@ -7938,7 +7926,7 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheck
 }
 
 @Composable
-private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload: (String, String) -> Unit, onDismiss: () -> Unit) {
+private fun DownloadDialog(url: String, onDownload: (String, String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val isApk = url.substringBefore('?').endsWith(".apk", ignoreCase = true)
     var expectedHash by rememberSaveable { mutableStateOf("") }
@@ -7949,10 +7937,8 @@ private fun DownloadDialog(url: String, skipResolve: Boolean = false, onDownload
         .getOrDefault(encodedName)
     val initialName = DownloadFileName.readable(decodedName).ifBlank { "download" }
     var fileName by remember(url) { mutableStateOf(initialName) }
-    // skipResolve：已有本地捕获的响应体时不得再发网络探测——对一次性令牌地址二次请求会 403
-    var resolving by remember(url) { mutableStateOf(!skipResolve && DownloadFileName.isGeneric(initialName)) }
+    var resolving by remember(url) { mutableStateOf(DownloadFileName.isGeneric(initialName)) }
     LaunchedEffect(url) {
-        if (skipResolve) { resolving = false; return@LaunchedEffect }
         if (!DownloadFileName.isGeneric(initialName)) return@LaunchedEffect
         val resolved = DownloadFileName.resolve(url)
         if (resolved != null) fileName = resolved
@@ -8474,45 +8460,6 @@ private fun UpdateDialog(release: ReleaseInfo, onDismiss: () -> Unit) {
     }
 }
 
-/**
- * 镜像站高速下载通道卡片（位于发现新版本弹窗内）。
- *
- * 仅当镜像站已同步该版本时才渲染。下载前需在网页完成站点的人机验证（PoW），
- * 因此点击只负责用浏览器打开直链，验证与下载都由站点页面完成。
- */
-@Composable
-private fun LemwoodChannelCard(onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Speed, null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(20.dp))
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.s423), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(R.string.s424),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(Icons.Default.ArrowForward, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-        }
-    }
-}
 
 /**
  * Mirror酱高速下载卡片（关于页与发现新版本弹窗共用）。
@@ -8528,6 +8475,24 @@ private fun MirrorChyanChannelCard(onClick: () -> Unit) {
         icon = Icons.Rounded.Speed,
         tintContainer = MaterialTheme.colorScheme.primaryContainer,
         tintContent = MaterialTheme.colorScheme.onPrimaryContainer,
+        onClick = onClick
+    )
+}
+
+/**
+ * 枫源镜像下载卡片（发现新版本弹窗内）。
+ *
+ * 只在枫源已同步当前版本时渲染。点击用本应用浏览器打开站点验证页，
+ * 验证、授权与节点选择全部由站点完成，应用侧不参与挑战计算。
+ */
+@Composable
+private fun FyHubChannelCard(onClick: () -> Unit) {
+    ChannelCard(
+        title = stringResource(R.string.fyhub_channel),
+        subtitle = stringResource(R.string.fyhub_channel_sub),
+        icon = Icons.Rounded.CloudDownload,
+        tintContainer = MaterialTheme.colorScheme.tertiaryContainer,
+        tintContent = MaterialTheme.colorScheme.onTertiaryContainer,
         onClick = onClick
     )
 }
@@ -8657,22 +8622,20 @@ private fun UpdateIntroDialog(
                 )
             }
 
-            // 无任何可下载地址且无镜像渠道时才提示错误
-            if (effectiveUrl.isBlank() && !release.lemwoodAvailable && !MirrorChyan.isAvailable) {
+            // 既没有直链也没有 Mirror酱 渠道时才提示错误
+            if (effectiveUrl.isBlank() && !MirrorChyan.isAvailable && release.fyhubPath.isBlank()) {
                 Text(stringResource(R.string.s428), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-            // 镜像站高速通道：站点已同步该版本时才渲染，
-            // 未配置的公开构建不会出现空壳入口。
-            if (LemwoodMirror.isAvailable && release.lemwoodAvailable) {
-                LemwoodChannelCard(
+            // 枫源镜像：站点已完成同步时给出验证页入口，验证与下载都由站点页面完成
+            if (release.fyhubPath.isNotBlank()) {
+                FyHubChannelCard(
                     onClick = {
-                        openMirrorDownload(context, LemwoodMirror.apkDownloadUrl(release.version))
+                        openSelfBrowser(context, FyHubMirror.verifyPageUrl(release.fyhubPath))
                         onDismiss()
                     }
                 )
             }
-            // Mirror酱高速下载：不支持应用内下载，点击直接跳转项目页，
-            // 由网页侧完成分发。与柠枺卡片并列展示，两者互不影响。
+            // Mirror酱高速下载：不支持应用内下载，点击直接跳转项目页，由网页侧完成分发。
             // rid 未注入时整体不展示：否则会跳到 ?rid= 空参数页，等于死链
             if (MirrorChyan.isAvailable) {
                 MirrorChyanChannelCard(

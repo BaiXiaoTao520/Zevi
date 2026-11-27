@@ -186,13 +186,10 @@ class ZeviApplication : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         runCatching { onMemoryPressure?.invoke(level) }
-        // 严重级别时清理可重建缓存；下载捕获目录由下载 Worker 使用后清理。
+        // 严重级别时清理可重建缓存。
         // 不能动 filesDir 下的已下载文件——那是用户资产。
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
-            runCatching {
-                cacheDir?.listFiles()?.filter { it.name != "download-capture" }
-                    ?.forEach { it.deleteRecursively() }
-            }
+            runCatching { cacheDir?.listFiles()?.forEach { it.deleteRecursively() } }
         }
     }
 

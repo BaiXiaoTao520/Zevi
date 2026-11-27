@@ -454,8 +454,6 @@
     <string name="s420">页面可能需要登录，支持微信、支付宝等方式；过程中遇到的问题也可在 GitHub 仓库反馈。</string>
     <string name="s421">无论是否赞助，感谢你使用 Zevi；遇到问题欢迎在 GitHub 仓库反馈，帮助它变得更好。</string>
     <string name="s422">前往赞助</string>
-    <string name="s423">柠泽镜像站通道</string>
-    <string name="s424">需在网页完成验证后下载</string>
     <string name="s425">升级更新</string>
     <string name="s426">发现新版本 %1$s</string>
     <string name="s427">暂无更新说明</string>
@@ -812,4 +810,6 @@
     <string name="form_bookmark_hint">保存后会出现在首页的快捷入口</string>
     <string name="form_engine_hint">添加后可在搜索引擎列表中随时切换</string>
     <string name="form_ua_hint">自定义标识会随所有网页请求一起发送</string>
+    <string name="fyhub_channel">枫源镜像下载</string>
+    <string name="fyhub_channel_sub">经站点验证后由镜像节点分发</string>
 </resources>
