@@ -2,7 +2,7 @@ name: Android 自动构建与发布
 
 # 推送到 main 即自动构建并发布正式版：打 SSH 签名标签、创建 GitHub Release、
 # 同步镜像站。同版本重复发布会替换旧 Release 与标签，不会因标签已存在而失败。
-# 其它分支的推送走 android-beta.yml，产物只上传到 Actions 供下载。
+# android-beta.yml 不挂 push，只在需要时手动触发。
 on:
   push:
     branches: ["main"]
