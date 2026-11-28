@@ -23,16 +23,27 @@ val mirrorChyanRid: String = (System.getenv("MIRRORCHYAN_RID")
     ?: project.findProperty("mirrorchyan.rid")?.toString()
     ?: "").trim()
 
+// 赞助名单使用公开 HTTPS 地址；爱发电凭证只保留在服务端。
+val sponsorFeedUrl: String = (System.getenv("SPONSOR_FEED_URL")
+    ?: project.findProperty("sponsor.feedUrl")?.toString()
+    ?: "").trim()
+
 android {
     namespace = "com.zex.zexbrowse"
-    compileSdk = 37
+    // Compose 1.13（BOM 2026.11.01）的 AAR 元数据要求 compileSdk 37.1，
+    // 带 minor 的 API 级别必须用块语法；sdkmanager 包名为 platforms;android-37.1
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.zex.zexbrowse"
         minSdk = 29
         targetSdk = 37
-        versionCode = 104
-        versionName = "12.5.0"
+        versionCode = 105
+        versionName = "12.5.3"
         ndk { abiFilters += "arm64-v8a" }
 
         // GeckoView 内核主版本号（如 "160.0"），供 UA 生成与兜底使用
@@ -46,6 +57,10 @@ android {
         // Mirror酱资源 ID：与 CDK 同级保密，为空时相关功能整体不激活
         val escapedRid = mirrorChyanRid.replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "MIRRORCHYAN_RID", "\"$escapedRid\"")
+
+        val escapedSponsorFeedUrl = sponsorFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\r", "\\r").replace("\n", "\\n")
+        buildConfigField("String", "SPONSOR_FEED_URL", "\"$escapedSponsorFeedUrl\"")
     }
 
     splits {
@@ -94,7 +109,7 @@ configurations.configureEach {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.11.01"))
     // core 1.17.0：提供 NotificationCompat.ProgressStyle 与 setRequestPromotedOngoing，
     // 下载通知才能升级为 Android 16+ 的实时活动（Live Update）。
     implementation("androidx.core:core-ktx:1.17.0")
@@ -105,9 +120,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    // material3 固定 1.5.0-beta02：1.4.x 稳定版没有 ContainedLoadingIndicator（带容器背景的形变加载指示器），
+    // material3 固定 1.5.0：1.4.x 稳定版没有 ContainedLoadingIndicator（带容器背景的形变加载指示器），
     // 它在 1.5.0-beta02 才加入。该版本属于 beta，但 API 已定稿，且项目原本就已在用 1.5.0-beta01。
-    implementation("androidx.compose.material3:material3:1.5.0-beta02")
+    implementation("androidx.compose.material3:material3:1.5.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.datastore:datastore-preferences:1.1.2")
     implementation("androidx.room:room-runtime:2.7.0")

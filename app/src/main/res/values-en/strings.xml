@@ -812,4 +812,11 @@
     <string name="form_ua_hint">Sent with every web request</string>
     <string name="fyhub_channel">Download via FyHub</string>
     <string name="fyhub_channel_sub">Site verification, then served by mirror nodes</string>
+    <string name="about_sponsors">Zevi sponsors</string>
+    <string name="about_sponsors_sub">Thanks to everyone supporting Zevi</string>
+    <string name="sponsors_empty">No sponsors yet — be the first to support Zevi</string>
+    <string name="sponsors_failed">Failed to load, please retry later</string>
+    <string name="sponsors_unavailable">The sponsor feed is not configured</string>
+    <string name="sponsors_amount">Total %1$s CNY</string>
+    <string name="sponsors_loading">Loading Afdian sponsor data…</string>
 </resources>

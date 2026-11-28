@@ -57,7 +57,26 @@ Zevi 是一款基于 **GeckoView（Firefox 内核）**、Kotlin 和 Jetpack Comp
 ./gradlew assembleRelease
 ```
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:b2c9f0c9feb104602bb4afeeb0a86923902e39224fa5fe5f549578d99a7cb75a -->
+
 发布所需的签名与可选服务配置由维护者在构建环境中自行提供，不随仓库分发。
+
+### 公开赞助名单
+
+在 GitHub Actions 仓库变量中设置 `SPONSOR_FEED_URL`，或在本地使用同名环境变量或 Gradle 属性 `sponsor.feedUrl`。未配置时，应用显示名单不可用。
+
+该地址会写入 APK，须为无需登录的公开 HTTPS 地址，不能含有访问密钥。可在服务端查询爱发电并发布经审核的名单，也可托管手动审核的静态 JSON。爱发电账号和 API Token 只用于服务端查询，勿传入 Android 构建。仅发布获准公开的字段，勿直接转发原始接口响应。
+
+```json
+{"sponsors":[{"name":"公开昵称","avatarUrl":"https://example.org/avatar.png","amount":"30.00"}]}
+```
+
+`name` 为必填，`avatarUrl` 和 `amount` 可在未获准公开时省略。按显示顺序返回，应用最多读取前 50 项；空名单返回 `{"sponsors":[]}`。
+
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## 引用的开源项目
 

@@ -138,6 +138,8 @@ import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.CloudOff
@@ -256,6 +258,7 @@ import com.zex.zexbrowse.data.decodeCustomSearchEngines
 import com.zex.zexbrowse.data.DownloadEntity
 import com.zex.zexbrowse.data.encodeCustomSearchEngines
 import com.zex.zexbrowse.data.MirrorChyan
+import com.zex.zexbrowse.data.AfdianSponsor
 import com.zex.zexbrowse.data.FyHubMirror
 import com.zex.zexbrowse.data.NetworkDiagnostics
 import com.zex.zexbrowse.data.NetworkProbe
@@ -8053,6 +8056,24 @@ private fun AboutScreen(
     var contributorsRequest by remember { mutableStateOf(0) }
     // 更新设置面板：把自动检查开关与手动检查按钮收进一个底部面板
     var showUpdateSheet by remember { mutableStateOf(false) }
+    // 赞助者面板：null 表示还没加载，isFailure 区分「加载失败」与「确实没人赞助」
+    var showSponsors by remember { mutableStateOf(false) }
+    var sponsors by remember { mutableStateOf<List<com.zex.zexbrowse.data.Sponsor>?>(null) }
+    var sponsorsFailed by remember { mutableStateOf(false) }
+    var sponsorsLoading by remember { mutableStateOf(false) }
+    // 首次打开与手动刷新共用同一条加载链路
+    val loadSponsors: () -> Unit = {
+        if (!sponsorsLoading) {
+            sponsorsLoading = true
+            sponsorsFailed = false
+            scope.launch {
+                val result = runCatching { AfdianSponsor.sponsors() }
+                sponsors = result.getOrNull()?.getOrNull()
+                sponsorsFailed = result.isFailure || result.getOrNull()?.isFailure == true
+                sponsorsLoading = false
+            }
+        }
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.s282)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, stringResource(R.string.s063)) } }) }) { padding ->
         // 条目较多，在窄屏/横屏/大字体下会超出一屏，必须可滚动，否则底部内容点不到
@@ -8141,6 +8162,18 @@ private fun AboutScreen(
                 horizontalPadding = 0.dp,
                 colorIndex = 1
             )
+            // Zevi 赞助者：只列爱发电上的赞助记录，点开底部面板查看
+            SettingsEntry(
+                title = stringResource(R.string.about_sponsors),
+                subtitle = stringResource(R.string.about_sponsors_sub),
+                icon = Icons.Rounded.Favorite,
+                onClick = {
+                    showSponsors = true
+                    if (sponsors == null) loadSponsors()
+                },
+                horizontalPadding = 0.dp,
+                colorIndex = 2
+            )
             // 赞助与支持：自愿原则，点开说明面板后再决定是否前往
             SettingsEntry(
                 title = stringResource(R.string.s406),
@@ -8148,7 +8181,7 @@ private fun AboutScreen(
                 icon = Icons.Rounded.VolunteerActivism,
                 onClick = onSponsor,
                 horizontalPadding = 0.dp,
-                colorIndex = 2
+                colorIndex = 3
             )
             // 自动检查与手动检查合并为一个入口，点开底部面板后再分别操作：
             // 页面上并排两个与「更新」相关的卡片会显得重复
@@ -8158,7 +8191,7 @@ private fun AboutScreen(
                 icon = Icons.Default.SystemUpdate,
                 onClick = { showUpdateSheet = true },
                 horizontalPadding = 0.dp,
-                colorIndex = 3
+                colorIndex = 4
             )
         }
     }
@@ -8258,6 +8291,16 @@ private fun AboutScreen(
         }
     }
 
+    if (showSponsors) {
+        SponsorSheet(
+            sponsors = sponsors,
+            loading = sponsorsLoading,
+            failed = sponsorsFailed,
+            onRefresh = loadSponsors,
+            onDismiss = { showSponsors = false }
+        )
+    }
+
     update?.let { release -> UpdateDialog(release = release, onDismiss = { update = null }) }
     message?.let { content ->
         AppDialog(
@@ -8267,6 +8310,176 @@ private fun AboutScreen(
             text = { Text(content) },
             confirmButton = { TextButton(onClick = { message = null }) { Text(stringResource(R.string.s127)) } }
         )
+    }
+}
+
+/**
+ * Zevi 赞助者面板：列出爱发电上的赞助记录。
+ *
+ * 与其它面板保持同一套外观（上两角圆角、拖拽横条、点遮罩收起、先播收起动画再回调）。
+ * 条目用卡片横条：头像 + 昵称 + 累计金额，比纯文字列表更容易扫读。
+ * 底部只有两个动作：刷新在左、关闭在右。
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SponsorSheet(
+    sponsors: List<com.zex.zexbrowse.data.Sponsor>?,
+    loading: Boolean,
+    failed: Boolean,
+    onRefresh: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val dismiss: () -> Unit = {
+        scope.launch {
+            runCatching { sheetState.hide() }
+            onDismiss()
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = dismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Favorite,
+                            null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.about_sponsors),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.about_sponsors_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            when {
+                // 加载态：形变指示器 + 一句说明，避免只转个圈让人不知道在等什么。
+                // 请求没回来之前一直停在这里，失败也只会走到下面的 failed 分支，
+                // 不会先闪一下空列表再变成错误。
+                loading && sponsors == null -> Column(
+                    Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.sponsors_loading),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                !AfdianSponsor.isAvailable -> Text(
+                    stringResource(R.string.sponsors_unavailable),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                failed -> Text(
+                    stringResource(R.string.sponsors_failed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+                sponsors.isNullOrEmpty() -> Text(
+                    stringResource(R.string.sponsors_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> LazyColumn(
+                    Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(sponsors.orEmpty()) { sponsor -> SponsorRow(sponsor) }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(onClick = onRefresh, enabled = !loading, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.s112))
+                }
+                Button(onClick = dismiss, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.s079))
+                }
+            }
+        }
+    }
+}
+
+/** 单条赞助记录：头像 + 昵称 + 累计金额 */
+@Composable
+private fun SponsorRow(sponsor: com.zex.zexbrowse.data.Sponsor) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (sponsor.avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = sponsor.avatarUrl,
+                    contentDescription = sponsor.name,
+                    modifier = Modifier.size(40.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = CircleShape
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Person,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(sponsor.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (sponsor.amount.isNotBlank() && sponsor.amount.toDoubleOrNull() != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.sponsors_amount, sponsor.amount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }
 
