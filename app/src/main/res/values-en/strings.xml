@@ -816,7 +816,7 @@
     <string name="about_sponsors_sub">Thanks to everyone supporting Zevi</string>
     <string name="sponsors_empty">No sponsors yet — be the first to support Zevi</string>
     <string name="sponsors_failed">Failed to load, please retry later</string>
-    <string name="sponsors_unavailable">Afdian credentials are not configured</string>
+    <string name="sponsors_unavailable">The sponsor feed is not configured</string>
     <string name="sponsors_amount">Total %1$s CNY</string>
     <string name="sponsors_loading">Loading Afdian sponsor data…</string>
 </resources>

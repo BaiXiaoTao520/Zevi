@@ -8320,7 +8320,7 @@ private fun AboutScreen(
  * 条目用卡片横条：头像 + 昵称 + 累计金额，比纯文字列表更容易扫读。
  * 底部只有两个动作：刷新在左、关闭在右。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SponsorSheet(
     sponsors: List<com.zex.zexbrowse.data.Sponsor>?,

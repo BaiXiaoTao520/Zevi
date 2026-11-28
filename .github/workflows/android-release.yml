@@ -96,9 +96,8 @@ jobs:
           # Mirror酱资源 ID：与 CDK 同级保密，用于项目页链接与 API 路径，
           # 缺失时相关入口整体不激活
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
-          # 爱发电开放接口凭证：用于关于页的赞助者名单
-          AFDIAN_USER_ID: ${{ secrets.AFDIAN_USER_ID }}
-          AFDIAN_TOKEN: ${{ secrets.AFDIAN_TOKEN }}
+          # 公开赞助名单地址，构建时可留空。
+          SPONSOR_FEED_URL: ${{ vars.SPONSOR_FEED_URL }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: 生成 APK SHA-256 校验文件

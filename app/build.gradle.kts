@@ -23,17 +23,9 @@ val mirrorChyanRid: String = (System.getenv("MIRRORCHYAN_RID")
     ?: project.findProperty("mirrorchyan.rid")?.toString()
     ?: "").trim()
 
-// 爱发电开放接口凭证：user_id 与 API Token 用于查询赞助者名单，同样不写入源码。
-// token 只参与签名、不上传，但会随 APK 分发，因此只在需要展示赞助名单时才有意义；
-// 未注入时 AfdianSponsor.isAvailable 为 false，界面提示「未配置」而不发请求。
-// 凭证一律由构建环境注入，源码里不留默认值：
-// CI 用仓库 Secrets（AFDIAN_USER_ID / AFDIAN_TOKEN），本地可写进 ~/.gradle/gradle.properties。
-// 缺失时 AfdianSponsor.isAvailable 为 false，面板给出「未配置」提示，不发请求也不会崩。
-val afdianUserId: String = (System.getenv("AFDIAN_USER_ID")
-    ?: project.findProperty("afdian.userId")?.toString()
-    ?: "").trim()
-val afdianToken: String = (System.getenv("AFDIAN_TOKEN")
-    ?: project.findProperty("afdian.token")?.toString()
+// 赞助名单使用公开 HTTPS 地址；爱发电凭证只保留在服务端。
+val sponsorFeedUrl: String = (System.getenv("SPONSOR_FEED_URL")
+    ?: project.findProperty("sponsor.feedUrl")?.toString()
     ?: "").trim()
 
 android {
@@ -66,11 +58,9 @@ android {
         val escapedRid = mirrorChyanRid.replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "MIRRORCHYAN_RID", "\"$escapedRid\"")
 
-        // 爱发电凭证：为空时赞助者面板提示未配置
-        val escapedAfdianUser = afdianUserId.replace("\\", "\\\\").replace("\"", "\\\"")
-        buildConfigField("String", "AFDIAN_USER_ID", "\"$escapedAfdianUser\"")
-        val escapedAfdianToken = afdianToken.replace("\\", "\\\\").replace("\"", "\\\"")
-        buildConfigField("String", "AFDIAN_TOKEN", "\"$escapedAfdianToken\"")
+        val escapedSponsorFeedUrl = sponsorFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")
+            .replace("\r", "\\r").replace("\n", "\\n")
+        buildConfigField("String", "SPONSOR_FEED_URL", "\"$escapedSponsorFeedUrl\"")
     }
 
     splits {
