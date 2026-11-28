@@ -52,20 +52,23 @@ object FyHubMirror {
      * 只保留 `available = true` 且 `prerelease = false` 的条目；
      * 接口不可达或返回结构异常时返回空列表，由调用方回退其它来源。
      */
-    suspend fun assets(client: OkHttpClient): List<FyHubAsset> = withContext(Dispatchers.IO) {
+    suspend fun assets(client: OkHttpClient): List<FyHubAsset> = fetchAssets(client).orEmpty()
+
+    /** 查询失败返回 null；成功但没有正式资产返回空列表。 */
+    internal suspend fun fetchAssets(client: OkHttpClient): List<FyHubAsset>? = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
                 .url("$BASE/api/public/v1/projects/$PROJECT_ID/assets")
                 .header("Accept", "application/json")
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use emptyList<FyHubAsset>()
+                if (!response.isSuccessful) return@use null
                 val text = response.body?.string()?.trim().orEmpty()
-                if (text.isBlank()) return@use emptyList<FyHubAsset>()
-                val root = runCatching { JSONObject(text) }.getOrNull() ?: return@use emptyList<FyHubAsset>()
-                if (root.optString("status") != "success") return@use emptyList<FyHubAsset>()
-                val array = root.optJSONObject("data")?.optJSONArray("assets") ?: return@use emptyList<FyHubAsset>()
-                buildList {
+                if (text.isBlank()) return@use null
+                val root = JSONObject(text)
+                if (root.optString("status") != "success") return@use null
+                val array = root.optJSONObject("data")?.optJSONArray("assets") ?: return@use null
+                buildList<FyHubAsset> {
                     for (index in 0 until array.length()) {
                         val item = array.optJSONObject(index) ?: continue
                         if (!item.optBoolean("available", false)) continue
@@ -83,7 +86,7 @@ object FyHubMirror {
                     }
                 }
             }
-        }.getOrDefault(emptyList())
+        }.getOrNull()
     }
 
     /** 主站验证页地址：验证、授权与节点选择都由站点页面完成 */

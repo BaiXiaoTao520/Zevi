@@ -13,6 +13,11 @@ on:
         required: true
         default: ''
 
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+  queue: max
+
 permissions:
   contents: write
   actions: write
