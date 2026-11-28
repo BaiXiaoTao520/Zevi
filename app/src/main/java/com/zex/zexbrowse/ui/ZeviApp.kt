@@ -137,6 +137,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.CloudOff
@@ -255,6 +256,7 @@ import com.zex.zexbrowse.data.decodeCustomSearchEngines
 import com.zex.zexbrowse.data.DownloadEntity
 import com.zex.zexbrowse.data.encodeCustomSearchEngines
 import com.zex.zexbrowse.data.MirrorChyan
+import com.zex.zexbrowse.data.FyHubMirror
 import com.zex.zexbrowse.data.NetworkDiagnostics
 import com.zex.zexbrowse.data.NetworkProbe
 import com.zex.zexbrowse.data.RecommendCategory
@@ -2527,6 +2529,22 @@ private fun RecommendCategoryScreen(
  *    而是弹系统选择器并仅保留真浏览器，由用户自己决定；
  * 3. 设备上只有一个浏览器时，直接用那个（不存在选择余地）。
  */
+/**
+ * 用本应用自己的浏览器打开链接。
+ *
+ * 用于枫源镜像的下载验证页：站点要求页面内完成 PoW 验证，而 GeckoView 是 Firefox 内核，
+ * HTTPS 下 `isSecureContext` 与 `crypto.subtle` 都可用，验证能在应用内正常跑完。
+ *
+ * 不能复用 [openInBrowser]——那个函数刻意避开自身（那是为「跳浏览器」场景设计的）。
+ */
+private fun openSelfBrowser(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        .setPackage(context.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (runCatching { context.startActivity(intent) }.isSuccess) return
+    openInBrowser(context, url)
+}
+
 /**
  * 用外部浏览器打开普通网页类链接（联系我们、关于页主页、赞助页等）。
  *
@@ -6319,9 +6337,9 @@ private fun readStorageStats(context: android.content.Context): StorageStats {
     )
 }
 
-/**
- * 清理缓存目录。
- *
+/** 清理缓存目录 */
+private fun clearAppCache(context: android.content.Context) {
+    context.cacheDir.listFiles()?.forEach { file ->
         runCatching { file.deleteRecursively() }
     }
 }
@@ -8461,6 +8479,24 @@ private fun MirrorChyanChannelCard(onClick: () -> Unit) {
     )
 }
 
+/**
+ * 枫源镜像下载卡片（发现新版本弹窗内）。
+ *
+ * 只在枫源已同步当前版本时渲染。点击用本应用浏览器打开站点验证页，
+ * 验证、授权与节点选择全部由站点完成，应用侧不参与挑战计算。
+ */
+@Composable
+private fun FyHubChannelCard(onClick: () -> Unit) {
+    ChannelCard(
+        title = stringResource(R.string.fyhub_channel),
+        subtitle = stringResource(R.string.fyhub_channel_sub),
+        icon = Icons.Rounded.CloudDownload,
+        tintContainer = MaterialTheme.colorScheme.tertiaryContainer,
+        tintContent = MaterialTheme.colorScheme.onTertiaryContainer,
+        onClick = onClick
+    )
+}
+
 /** GitHub 直链浏览器下载卡片：与「下载」同源，只是改由浏览器接管 */
 @Composable
 private fun BrowserDownloadChannelCard(onClick: () -> Unit) {
@@ -8587,8 +8623,17 @@ private fun UpdateIntroDialog(
             }
 
             // 既没有直链也没有 Mirror酱 渠道时才提示错误
-            if (effectiveUrl.isBlank() && !MirrorChyan.isAvailable) {
+            if (effectiveUrl.isBlank() && !MirrorChyan.isAvailable && release.fyhubPath.isBlank()) {
                 Text(stringResource(R.string.s428), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            // 枫源镜像：站点已完成同步时给出验证页入口，验证与下载都由站点页面完成
+            if (release.fyhubPath.isNotBlank()) {
+                FyHubChannelCard(
+                    onClick = {
+                        openSelfBrowser(context, FyHubMirror.verifyPageUrl(release.fyhubPath))
+                        onDismiss()
+                    }
+                )
             }
             // Mirror酱高速下载：不支持应用内下载，点击直接跳转项目页，由网页侧完成分发。
             // rid 未注入时整体不展示：否则会跳到 ?rid= 空参数页，等于死链

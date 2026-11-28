@@ -810,4 +810,6 @@
     <string name="form_bookmark_hint">Saved sites appear on the home screen</string>
     <string name="form_engine_hint">Switch between engines any time after adding</string>
     <string name="form_ua_hint">Sent with every web request</string>
+    <string name="fyhub_channel">Download via FyHub</string>
+    <string name="fyhub_channel_sub">Site verification, then served by mirror nodes</string>
 </resources>

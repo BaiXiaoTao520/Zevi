@@ -1,15 +1,22 @@
 name: Android 自动构建与发布
 
-# 只保留手动触发：推送到 main 不再直接发版。
-# 日常开发与合并走 android-beta.yml，产物只上传到 Actions 供下载；
-# 测试通过后再回到这里手动执行，才会打标签并发布到 Releases。
+# 推送到 main 即自动构建并发布正式版：打 SSH 签名标签、创建 GitHub Release、
+# 同步镜像站。同版本重复发布会替换旧 Release 与标签，不会因标签已存在而失败。
+# android-beta.yml 不挂 push，只在需要时手动触发。
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       confirm:
         description: '输入 release 确认发布到 Releases'
         required: true
         default: ''
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: write
@@ -23,7 +30,9 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
+      # 只在手动触发时要求确认；推送到 main 的自动发布不再需要额外输入
       - name: 校验发布确认
+        if: github.event_name == 'workflow_dispatch'
         env:
           RELEASE_CONFIRM: ${{ inputs.confirm }}
         run: |

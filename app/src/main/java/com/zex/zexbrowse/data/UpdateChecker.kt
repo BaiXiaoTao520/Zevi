@@ -19,7 +19,9 @@ import java.util.concurrent.TimeUnit
 data class ReleaseInfo(
     val version: String,
     val notes: String,
-    val downloadUrl: String
+    val downloadUrl: String,
+    /** 枫源镜像已同步该版本时的验证页路径；为空表示当前版本在该站不可用 */
+    val fyhubPath: String = ""
 )
 
 data class Contributor(val name: String, val avatarUrl: String, val contributions: Int)
@@ -61,19 +63,26 @@ class UpdateChecker(
         val github = githubLatest()
         val githubOk = github != null
 
-        val anySourceOk = mirrorOk || githubOk
+        // 枫源镜像：只查资产列表，不需要验证；取其中比本机新的最高版本
+        val fyhubAssets = FyHubMirror.fetchAssets(client)
+        val fyhub = fyhubAssets.orEmpty()
+            .filter { isNewer(it.version) }
+            .maxWithOrNull { a, b -> if (isNewer(a.version, b.version)) 1 else -1 }
 
-        return CheckOutcome(release = aggregate(remote, mirrorVersion, github), anySourceOk = anySourceOk)
+        val anySourceOk = mirrorOk || githubOk || fyhubAssets != null
+
+        return CheckOutcome(release = aggregate(remote, mirrorVersion, github, fyhub), anySourceOk = anySourceOk)
     }
 
     /**
      * 检查是否有新版本。本地已是最新或所有来源都不可用时返回 null。
      *
-     * 两个来源同时参与，各自贡献自己擅长的部分：
+     * 三个来源同时参与，各自贡献自己擅长的部分：
      * - Mirror酱：国内连通性最好，负责确认版本号与更新日志；
-     * - GitHub：唯一能拿到 assets 直链的源，应用内下载依赖它。
+     * - GitHub：唯一能拿到 assets 直链的源，应用内下载依赖它；
+     * - 枫源镜像：已同步该版本时标记可走站点验证页下载。
      *
-     * 两者并存而非短路：任一渠道出问题时另一个还能用。
+     * 三者并存而非短路：任一渠道出问题时其余仍可用。
      */
     suspend fun latest(): ReleaseInfo? = check().release
 
@@ -85,14 +94,16 @@ class UpdateChecker(
     private fun aggregate(
         remote: MirrorChyan.Result,
         mirrorVersion: String?,
-        github: ReleaseInfo?
+        github: ReleaseInfo?,
+        fyhub: FyHubAsset?
     ): ReleaseInfo? {
-        // 两方取最高版本，避免任何单一来源滞后掩盖真实的新版本。
+        // 多方取最高版本，避免任何单一来源滞后掩盖真实的新版本。
         // 不能用拼接数字的方式比大小（段数不同的版本会得出错误结果），
         // 直接复用 isNewer 的逐段比较。
         val candidates = listOfNotNull(
             mirrorVersion?.let { ReleaseInfo(it, remote.releaseNote, "") },
-            github
+            github,
+            fyhub?.let { ReleaseInfo(it.version, "", "") }
         ).filter { isNewer(it.version) }
 
         if (candidates.isEmpty()) return null
@@ -110,9 +121,11 @@ class UpdateChecker(
         return best.copy(
             notes = notes,
             // 应用内下载只用 GitHub assets 直链：它是永久地址。
-            // Mirror酱 的高速下载必须经网页完成，不能当作应用内下载地址。
+            // Mirror酱 与枫源都要求经网页完成验证，不能当作应用内下载地址。
             // 因此拿不到 GitHub 直链时留空，弹窗会把「下载」置灰，引导用户走浏览器通道。
-            downloadUrl = github?.downloadUrl.orEmpty()
+            downloadUrl = github?.takeIf { sameVersion(it.version, best.version) }?.downloadUrl.orEmpty(),
+            // 枫源已同步同一个版本号时给出验证页路径，版本对不上就不展示该入口
+            fyhubPath = fyhub?.takeIf { sameVersion(it.version, best.version) }?.downloadPath.orEmpty()
         )
     }
 
@@ -132,13 +145,17 @@ class UpdateChecker(
             // 只有一路可用时直接用
             api == null -> atom
             atom == null -> api
-            // 两路都有：版本取较高的一方，说明取非空的，下载地址优先用 API 的直链
+            // 两路都有：版本取较高的一方，说明取非空的，同版本下载地址优先用 API 的直链
             else -> {
                 val useAtom = isNewer(atom.version, api.version)
                 ReleaseInfo(
                     version = if (useAtom) atom.version else api.version,
                     notes = if (useAtom) atom.notes.ifBlank { api.notes } else api.notes.ifBlank { atom.notes },
-                    downloadUrl = api.downloadUrl.ifBlank { atom.downloadUrl }
+                    downloadUrl = when {
+                        sameVersion(api.version, atom.version) -> api.downloadUrl.ifBlank { atom.downloadUrl }
+                        useAtom -> atom.downloadUrl
+                        else -> api.downloadUrl
+                    }
                 )
             }
         }
@@ -281,6 +298,12 @@ class UpdateChecker(
         }
     }
 
+    private fun sameVersion(first: String, second: String): Boolean =
+        normalizeVersion(first) == normalizeVersion(second)
+
+    private fun normalizeVersion(version: String): String =
+        version.trim().removePrefix("v").removePrefix("V")
+
     private fun prereleaseLabel(version: String): String? =
         version.trim().substringBefore('+').substringAfter('-', "").ifEmpty { null }
 
@@ -292,9 +315,7 @@ class UpdateChecker(
      * 导致 v11.1.7 被当成 0.1.7，永远比本地 11.x 小，新版本检测直接失效。
      */
     private fun versionParts(version: String): List<Int> =
-        version.trim()
-            .removePrefix("v")
-            .removePrefix("V")
+        normalizeVersion(version)
             .substringBefore('+')
             .substringBefore('-')
             .split('.')

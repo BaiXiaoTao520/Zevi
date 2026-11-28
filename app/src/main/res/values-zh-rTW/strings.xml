@@ -810,4 +810,6 @@
     <string name="form_bookmark_hint">儲存後會出現在首頁的捷徑</string>
     <string name="form_engine_hint">新增後可在搜尋引擎列表中隨時切換</string>
     <string name="form_ua_hint">自訂標識會隨所有網頁請求一起傳送</string>
+    <string name="fyhub_channel">楓源鏡像下載</string>
+    <string name="fyhub_channel_sub">經站點驗證後由鏡像節點分發</string>
 </resources>

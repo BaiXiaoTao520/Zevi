@@ -32,7 +32,7 @@ android {
         minSdk = 29
         targetSdk = 37
         versionCode = 104
-        versionName = "12.5.0-beta3"
+        versionName = "12.5.0"
         ndk { abiFilters += "arm64-v8a" }
 
         // GeckoView 内核主版本号（如 "160.0"），供 UA 生成与兜底使用
