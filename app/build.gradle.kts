@@ -24,8 +24,14 @@ val mirrorChyanRid: String = (System.getenv("MIRRORCHYAN_RID")
     ?: "").trim()
 
 // 赞助名单使用公开 HTTPS 地址；爱发电凭证只保留在服务端。
-val sponsorFeedUrl: String = (System.getenv("SPONSOR_FEED_URL")
-    ?: project.findProperty("sponsor.feedUrl")?.toString()
+// 爱发电开放接口凭证：user_id 与 API Token 用于查询赞助者名单，不写入源码。
+// CI 用仓库 Secrets（AFDIAN_USER_ID / AFDIAN_TOKEN），本地可写进 ~/.gradle/gradle.properties。
+// 缺失时 AfdianSponsor.isAvailable 为 false，面板提示未配置，不发请求也不会崩。
+val afdianUserId: String = (System.getenv("AFDIAN_USER_ID")
+    ?: project.findProperty("afdian.userId")?.toString()
+    ?: "").trim()
+val afdianToken: String = (System.getenv("AFDIAN_TOKEN")
+    ?: project.findProperty("afdian.token")?.toString()
     ?: "").trim()
 
 android {
@@ -42,8 +48,8 @@ android {
         applicationId = "com.zex.zexbrowse"
         minSdk = 29
         targetSdk = 37
-        versionCode = 105
-        versionName = "12.5.3"
+        versionCode = 106
+        versionName = "12.5.4"
         ndk { abiFilters += "arm64-v8a" }
 
         // GeckoView 内核主版本号（如 "160.0"），供 UA 生成与兜底使用
@@ -58,9 +64,11 @@ android {
         val escapedRid = mirrorChyanRid.replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "MIRRORCHYAN_RID", "\"$escapedRid\"")
 
-        val escapedSponsorFeedUrl = sponsorFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\r", "\\r").replace("\n", "\\n")
-        buildConfigField("String", "SPONSOR_FEED_URL", "\"$escapedSponsorFeedUrl\"")
+        // 爱发电凭证：为空时赞助者面板提示未配置
+        val escapedAfdianUser = afdianUserId.replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "AFDIAN_USER_ID", "\"$escapedAfdianUser\"")
+        val escapedAfdianToken = afdianToken.replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "AFDIAN_TOKEN", "\"$escapedAfdianToken\"")
     }
 
     splits {
