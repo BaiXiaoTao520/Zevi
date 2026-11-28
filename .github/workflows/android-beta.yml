@@ -71,8 +71,9 @@ jobs:
           # 与正式包用同一套 Mirror酱 配置，测试包也走完整更新检查链路。
           MIRRORCHYAN_CDK: ${{ secrets.MIRRORCHYAN_CDK }}
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
-          # 公开赞助名单地址，构建时可留空。
-          SPONSOR_FEED_URL: ${{ vars.SPONSOR_FEED_URL }}
+          # 爱发电开放接口凭证：用于关于页的赞助者名单
+          AFDIAN_USER_ID: ${{ secrets.AFDIAN_USER_ID }}
+          AFDIAN_TOKEN: ${{ secrets.AFDIAN_TOKEN }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: 重命名产物
