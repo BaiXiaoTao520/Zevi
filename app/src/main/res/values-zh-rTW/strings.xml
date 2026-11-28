@@ -814,8 +814,9 @@
     <string name="fyhub_channel_sub">經站點驗證後由鏡像節點分發</string>
     <string name="about_sponsors">Zevi 贊助者</string>
     <string name="about_sponsors_sub">感謝所有支持 Zevi 的贊助者們</string>
-    <string name="sponsors_empty">還沒有贊助紀錄</string>
+    <string name="sponsors_empty">暫時還沒有贊助者，歡迎成為第一位支持者</string>
     <string name="sponsors_failed">載入失敗，請稍後重試</string>
     <string name="sponsors_unavailable">未設定愛發電憑證，無法取得贊助名單</string>
     <string name="sponsors_amount">累計贊助 %1$s 元</string>
+    <string name="sponsors_loading">正在載入愛發電贊助者資料…</string>
 </resources>

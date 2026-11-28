@@ -43,6 +43,8 @@ object AfdianSponsor {
 
     private const val ENDPOINT = "https://afdian.com/api/open/query-sponsor"
     private const val PAGE_SIZE = 50
+    private const val USER_AGENT =
+        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36"
 
     private val userId: String get() = BuildConfig.AFDIAN_USER_ID.trim()
     private val token: String get() = BuildConfig.AFDIAN_TOKEN.trim()
@@ -73,6 +75,8 @@ object AfdianSponsor {
             val request = Request.Builder()
                 .url(ENDPOINT)
                 .header("Accept", "application/json")
+                // 站点对没有 UA 的请求直接回 403，必须带上浏览器标识
+                .header("User-Agent", USER_AGENT)
                 .post(payload.toRequestBody("application/json".toMediaType()))
                 .build()
             client.newCall(request).execute().use { response ->

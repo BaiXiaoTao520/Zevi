@@ -26,6 +26,9 @@ val mirrorChyanRid: String = (System.getenv("MIRRORCHYAN_RID")
 // 爱发电开放接口凭证：user_id 与 API Token 用于查询赞助者名单，同样不写入源码。
 // token 只参与签名、不上传，但会随 APK 分发，因此只在需要展示赞助名单时才有意义；
 // 未注入时 AfdianSponsor.isAvailable 为 false，界面提示「未配置」而不发请求。
+// 凭证一律由构建环境注入，源码里不留默认值：
+// CI 用仓库 Secrets（AFDIAN_USER_ID / AFDIAN_TOKEN），本地可写进 ~/.gradle/gradle.properties。
+// 缺失时 AfdianSponsor.isAvailable 为 false，面板给出「未配置」提示，不发请求也不会崩。
 val afdianUserId: String = (System.getenv("AFDIAN_USER_ID")
     ?: project.findProperty("afdian.userId")?.toString()
     ?: "").trim()

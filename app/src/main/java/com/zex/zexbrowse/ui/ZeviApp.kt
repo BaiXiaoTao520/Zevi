@@ -8379,11 +8379,21 @@ private fun SponsorSheet(
                 }
             }
             when {
-                loading && sponsors == null -> Box(
+                // 加载态：形变指示器 + 一句说明，避免只转个圈让人不知道在等什么。
+                // 请求没回来之前一直停在这里，失败也只会走到下面的 failed 分支，
+                // 不会先闪一下空列表再变成错误。
+                loading && sponsors == null -> Column(
                     Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     ContainedLoadingIndicator(modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.sponsors_loading),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
                 !AfdianSponsor.isAvailable -> Text(
                     stringResource(R.string.sponsors_unavailable),
