@@ -1,17 +1,13 @@
-name: Android 自动构建与发布
+name: Android Release 构建发布
 
 # 推送到 main 即自动构建并发布正式版：打 SSH 签名标签、创建 GitHub Release、
 # 同步镜像站。同版本重复发布会替换旧 Release 与标签，不会因标签已存在而失败。
+# 手动触发用于重跑，行为与推送完全一致，不需要额外确认输入。
 # android-beta.yml 不挂 push，只在需要时手动触发。
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: '输入 release 确认发布到 Releases'
-        required: true
-        default: ''
 
 concurrency:
   group: android-release
@@ -30,17 +26,6 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
-      # 只在手动触发时要求确认；推送到 main 的自动发布不再需要额外输入
-      - name: 校验发布确认
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          RELEASE_CONFIRM: ${{ inputs.confirm }}
-        run: |
-          if [ "$RELEASE_CONFIRM" != release ]; then
-            echo "未确认发布：请在手动运行本工作流时把 confirm 填为 release。"
-            exit 1
-          fi
-
       - name: 检出源码
         uses: actions/checkout@v5
         with:
@@ -88,7 +73,7 @@ jobs:
           set -e
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           (yes | "$SDKMANAGER" --licenses >/dev/null 2>&1) || true
-          "$SDKMANAGER" --channel=3 "platforms;android-37.0" "build-tools;36.0.0"
+          "$SDKMANAGER" --channel=3 "platforms;android-37.1" "build-tools;36.0.0"
 
       - name: 解码 APK 签名密钥
         env:
@@ -111,6 +96,9 @@ jobs:
           # Mirror酱资源 ID：与 CDK 同级保密，用于项目页链接与 API 路径，
           # 缺失时相关入口整体不激活
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
+          # 爱发电开放接口凭证：用于关于页的赞助者名单
+          AFDIAN_USER_ID: ${{ secrets.AFDIAN_USER_ID }}
+          AFDIAN_TOKEN: ${{ secrets.AFDIAN_TOKEN }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: 生成 APK SHA-256 校验文件

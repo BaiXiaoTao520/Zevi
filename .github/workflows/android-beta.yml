@@ -53,7 +53,7 @@ jobs:
           set -e
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           (yes | "$SDKMANAGER" --licenses >/dev/null 2>&1) || true
-          "$SDKMANAGER" --channel=3 "platforms;android-37.0" "build-tools;36.0.0"
+          "$SDKMANAGER" --channel=3 "platforms;android-37.1" "build-tools;36.0.0"
 
       - name: 解码 APK 签名密钥
         env:
@@ -71,6 +71,9 @@ jobs:
           # 与正式包用同一套 Mirror酱 配置，测试包也走完整更新检查链路。
           MIRRORCHYAN_CDK: ${{ secrets.MIRRORCHYAN_CDK }}
           MIRRORCHYAN_RID: ${{ secrets.MIRRORCHYAN_RID }}
+          # 爱发电开放接口凭证：用于关于页的赞助者名单
+          AFDIAN_USER_ID: ${{ secrets.AFDIAN_USER_ID }}
+          AFDIAN_TOKEN: ${{ secrets.AFDIAN_TOKEN }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: 重命名产物
